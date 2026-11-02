@@ -1,4 +1,4 @@
-# Grocery Saver
+# CartCompare
 
 A project to help save money on groceries.
 
