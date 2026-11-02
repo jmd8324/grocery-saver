@@ -1,0 +1,6 @@
+# macOS system files
+.DS_Store
+
+# Secrets and local settings (never upload these)
+.env
+.env.*
