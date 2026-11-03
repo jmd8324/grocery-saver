@@ -9,6 +9,8 @@ nearby stores and shows which one gives you the cheapest cart.
 | --- | --- |
 | `index.html` | The landing page: short description, how it works, and the waitlist form. |
 | `list.html` | The list builder: ZIP code, type or upload a photo/screenshot of a list, review items, pick loyalty programs and stores. |
+| `prices.csv` | The price sheet: one row per product, one column per store. Fill this in to power the comparison (see below). |
+| `compare.js` | Matches list items to the price sheet, applies member prices and totals each store. |
 | `stores.json` | The State College, PA stores and loyalty programs shown on the list builder. Edit this to add or fix stores. |
 | `styles.css` | Colors and styles shared by every page (light and dark mode). |
 | `api/waitlist.js` | Saves waitlist emails to the database. |
@@ -27,6 +29,29 @@ The list reader (`api/parse-list.js`) sends the list to Claude, which returns ea
 `{ name, brand, quantity, original }`, with `brand` set to null unless the shopper actually named one.
 If the reader isn't set up, typed lists still work using a simpler built-in reader in the page;
 photos need the reader.
+
+## Filling in prices
+
+`prices.csv` is a spreadsheet. Open it in Numbers, Excel or Google Sheets.
+
+- **One row per product.** `item` is the product name; `also_called` lists other names shoppers use,
+  separated by `;` (e.g. `whole milk; gallon of milk`).
+- **`brand` blank = the cheapest generic/store-brand version.** Fill `brand` only for name-brand rows
+  (e.g. `Heinz`). Lists that say just "ketchup" use the cheapest of all ketchup rows; "Heinz ketchup" uses only Heinz rows.
+- **`size`** is the size you priced (e.g. `1 gallon`, `1 dozen`, `5 lb bag`). Use the same size at every store.
+  If a store doesn't sell that size, leave its cell blank.
+- **Store columns** are the regular shelf price, like `3.99`. The `_member` columns are the loyalty-card price,
+  used only for shoppers who pick that card. Leave blank if there's no card price.
+- **`checked_on`**: the date you checked, like `2026-11-03`. Shoppers see this.
+- GIANT's two stores share the `giant` columns. Sam's Club is only included for shoppers who pick the membership.
+
+Blank cells are fine. Each store's results show how many items were priced, and stores with more of
+the list priced are ranked first so missing items can't make a store look cheaper.
+
+When you're done, save or export it as **CSV** with the same name, `prices.csv`, and replace the file
+in the project (GitHub → the file → ✏️ edit, or **Add file → Upload files**). Vercel updates the site in about a minute.
+
+To add a product, add a row. To add a store, add it to `stores.json` with a `priceColumn`, then add that column here.
 
 ## Turning on the waitlist (one-time setup)
 
@@ -82,13 +107,16 @@ Each score is the signup time (milliseconds since 1970).
 
 **Phase 3: Get price data**
 - [x] Pick a starting city: State College, PA
-- [ ] Research where prices can come from (store APIs, Instacart/Kroger developer APIs, weekly ads, manual entry)
-- [ ] Define a simple data model: stores, products, prices, date checked
+- [x] Start with hand-collected prices (no public price APIs for GIANT, Weis or Wegmans)
+- [x] Simple data model: `prices.csv` (products × stores, member prices, date checked)
+- [ ] Fill in prices for the ~60 starter items
+- [ ] Later: apply to official data programs (Walmart, Target, Instacart) once there are users
 
 **Phase 4: First working version (MVP)**
-- [ ] Match each list item to products at each store (cheapest generic, or the named brand)
-- [ ] Apply member prices for the loyalty programs the shopper picked
-- [ ] Total the list at each store and show the cheapest
+- [x] Match each list item to products at each store (cheapest generic, or the named brand)
+- [x] Apply member prices for the loyalty programs the shopper picked
+- [x] Total the list at each store and show the cheapest
+- [x] Show which items have no price yet
 - [ ] Handle "no exact match" items (e.g. suggest the store brand)
 
 **Phase 5: Launch**

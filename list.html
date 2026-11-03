@@ -65,6 +65,27 @@
     .check small { color: var(--muted); display: block; line-height: 1.4; }
     .empty { color: var(--muted); font-style: italic; }
     .done { margin-top: 32px; text-align: center; }
+
+    #results { margin-top: 24px; }
+    .winner { border-color: var(--brand); border-width: 2px; }
+    .winner .eyebrow { font-size: 0.85rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
+    .winner .big-total { font-size: 2.25rem; font-weight: 700; line-height: 1.1; margin: 4px 0; }
+    .winner .store-name { font-size: 1.3rem; font-weight: 700; }
+    .save { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 999px; background: var(--badge-generic-bg); color: var(--brand); font-weight: 600; }
+    .results-list { display: grid; gap: 8px; margin-top: 16px; }
+    .results-list details { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .results-list summary {
+      display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 12px 14px; cursor: pointer; list-style: none;
+    }
+    .results-list summary::-webkit-details-marker { display: none; }
+    .results-list summary .total { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+    .results-list summary small { color: var(--muted); grid-column: 1 / -1; }
+    .lines { list-style: none; margin: 0; padding: 0 14px 12px; display: grid; gap: 4px; font-size: 0.95rem; }
+    .lines li { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border); padding-top: 6px; }
+    .lines li span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .lines .note { color: var(--muted); font-size: 0.85rem; }
+    .lines .missing { color: var(--muted); font-style: italic; }
+    .fine { font-size: 0.9rem; color: var(--muted); margin: 16px 0 0; }
   </style>
 </head>
 <body>
@@ -157,12 +178,15 @@
       <button class="btn" id="compare-btn">Compare prices</button>
       <div id="compare-msg" class="msg" role="status" aria-live="polite"></div>
     </div>
+
+    <section id="results" aria-live="polite" hidden></section>
   </main>
 
   <footer class="site">
     <div class="wrap">© <span id="year"></span> CartCompare · Store info for State College, PA</div>
   </footer>
 
+  <script src="compare.js"></script>
   <script>
   (function () {
     const $ = (id) => document.getElementById(id);
@@ -172,6 +196,8 @@
     // ---------- State ----------
     let state = { zip: '16801', items: [], loyalty: [], excludedStores: [] };
     let area = null;
+    let storeData = null;   // stores.json
+    let priceRows = null;   // prices.csv, loaded on first compare
     let photoData = null; // { media_type, data } after resizing
 
     function load() {
@@ -182,6 +208,8 @@
     }
     function save() {
       try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+      const results = document.getElementById('results');
+      if (results) results.hidden = true; // old results no longer match the list
     }
 
     function show(el, text, kind) { el.textContent = text; el.className = 'msg ' + (kind || ''); }
@@ -440,19 +468,119 @@
     }
 
     // ---------- Compare ----------
-    $('compare-btn').addEventListener('click', () => {
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const itemLabel = (it) => (it.exactBrand && it.brand && it.brand.toLowerCase() !== it.name.toLowerCase() ? it.brand + ' ' : '') + it.name;
+    const fmtDate = (d) => {
+      const t = new Date(d + 'T12:00:00');
+      return isNaN(t) ? d : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    };
+    const waitlistLink = () => Object.assign(document.createElement('a'), { href: '/#waitlist', textContent: 'Join the waitlist' });
+
+    function storeDetails(r, itemCount, open) {
+      const d = document.createElement('details');
+      d.open = open;
+      const sum = document.createElement('summary');
+      sum.append(el('strong', '', r.store.name), el('span', 'total', CartCompare.money(r.total)),
+        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + r.store.address));
+      const ul = el('ul', 'lines');
+      for (const l of r.lines) {
+        const li = document.createElement('li');
+        const left = el('span', '', itemLabel(l.item) + (l.mult > 1 ? ' × ' + l.mult : ''));
+        const notes = [l.product + (l.size ? ', ' + l.size : '')];
+        if (l.member) notes.push('member price');
+        if (l.sizeDiffers) notes.push('check size');
+        left.append(document.createElement('br'), el('span', 'note', notes.join(' · ')));
+        li.append(left, el('span', '', CartCompare.money(l.cents)));
+        ul.appendChild(li);
+      }
+      if (r.missing.length) {
+        const li = el('li', 'missing');
+        li.append(el('span', '', 'No price yet: ' + r.missing.map(itemLabel).join(', ')));
+        ul.appendChild(li);
+      }
+      d.append(sum, ul);
+      return d;
+    }
+
+    function renderResults(res) {
+      const box = $('results');
+      box.innerHTML = '';
+      box.hidden = false;
+
+      if (!res.ranked.length) {
+        const card = el('div', 'card');
+        card.append(el('h2', '', "We don't have prices for these items yet"),
+          el('p', 'muted', "We're collecting State College prices now, starting with the most common groceries. Your list is saved on this device."));
+        const p = document.createElement('p');
+        p.append(waitlistLink(), " and we'll email you when your items are priced.");
+        card.appendChild(p);
+        box.appendChild(card);
+        return;
+      }
+
+      const best = res.ranked[0];
+      const win = el('div', 'card winner');
+      win.append(el('div', 'eyebrow', 'Cheapest for your list'), el('div', 'store-name', best.store.name),
+        el('div', 'big-total', CartCompare.money(best.total)),
+        el('div', 'muted', best.found + ' of ' + res.itemCount + ' items priced'));
+      if (res.savings && res.savings.cents > 0) {
+        win.appendChild(el('div', 'save', 'Save ' + CartCompare.money(res.savings.cents) + ' vs ' + res.savings.vs.name));
+      }
+      box.appendChild(win);
+
+      const list = el('div', 'results-list');
+      res.ranked.forEach((r, i) => list.appendChild(storeDetails(r, res.itemCount, i === 0)));
+      box.appendChild(list);
+
+      const fine = [];
+      if (res.ranked.some((r) => r.found !== best.found)) {
+        fine.push('Stores with more of your list priced are listed first, so a lower total further down may be missing items.');
+      }
+      if (res.unpriced.length) fine.push('Not priced at any store yet: ' + res.unpriced.map(itemLabel).join(', ') + '.');
+      if (res.noPrices.length) fine.push('No prices yet for ' + res.noPrices.map((s) => s.name).join(', ') + '.');
+      for (const s of res.skipped) fine.push(s.store.name + ' left out: ' + s.reason.toLowerCase() + ' (pick it in step 4 to include it).');
+      if (res.checked) {
+        fine.push('Prices checked ' + (res.checked.from === res.checked.to ? 'on ' + fmtDate(res.checked.from)
+          : 'between ' + fmtDate(res.checked.from) + ' and ' + fmtDate(res.checked.to)) + '. Shelf prices change, so double-check in store.');
+      }
+      for (const t of fine) box.appendChild(el('p', 'fine', t));
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    $('compare-btn').addEventListener('click', async () => {
       if (!state.items.length) {
         show($('compare-msg'), 'Add at least one item to your list first.', 'err');
         return;
       }
+      if (!storeData) {
+        show($('compare-msg'), "Stores haven't loaded yet. Refresh and try again.", 'err');
+        return;
+      }
       save();
-      $('compare-msg').className = 'msg ok';
-      $('compare-msg').innerHTML = '';
-      $('compare-msg').append(
-        'Your list is saved on this device. Live price comparison is coming soon — ',
-        Object.assign(document.createElement('a'), { href: '/#waitlist', textContent: 'join the waitlist' }),
-        " and we'll tell you the moment it's ready."
-      );
+      const btn = $('compare-btn');
+      btn.disabled = true;
+      show($('compare-msg'), 'Comparing prices…', '');
+      try {
+        if (!priceRows) {
+          const r = await fetch('prices.csv', { cache: 'no-cache' });
+          if (!r.ok) throw new Error('prices');
+          priceRows = CartCompare.parseCSV(await r.text());
+        }
+        const stores = storeData.stores.filter((s) => !state.excludedStores.includes(s.id));
+        if (!stores.length) { show($('compare-msg'), 'Pick at least one store in step 5.', 'err'); return; }
+        const res = CartCompare.compare(state.items, priceRows, stores, { loyalty: state.loyalty, programs: storeData.loyaltyPrograms });
+        show($('compare-msg'), '', '');
+        renderResults(res);
+      } catch (err) {
+        show($('compare-msg'), "We couldn't load prices right now. Please try again in a moment.", 'err');
+      } finally {
+        btn.disabled = false;
+      }
     });
 
     // ---------- Start ----------
@@ -461,7 +589,7 @@
     renderItems();
     fetch('stores.json')
       .then((r) => r.json())
-      .then((data) => { area = data.area; renderStoresAndLoyalty(data); checkZip(); })
+      .then((data) => { storeData = data; area = data.area; renderStoresAndLoyalty(data); checkZip(); })
       .catch(() => { $('stores').textContent = "Couldn't load stores. Refresh to try again."; });
   })();
   </script>
