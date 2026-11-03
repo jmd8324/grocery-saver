@@ -39,6 +39,10 @@
     @media (max-width: 560px) { .found .controls { grid-template-columns: 1fr 1fr; } .found .controls label:first-child { grid-column: 1 / -1; } }
     .warn { font-size: 0.85rem; color: var(--badge-brand-text); background: var(--badge-brand-bg); padding: 2px 8px; border-radius: 6px; justify-self: start; }
     .summary { font-weight: 600; margin-top: 12px; }
+    .queue { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+    .queue li { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .queue .btns { display: flex; gap: 6px; }
+    .from { font-size: 0.9rem; color: var(--muted); margin: 0 0 8px; }
   </style>
 </head>
 <body>
@@ -49,7 +53,7 @@
 
   <main class="wrap narrow">
     <h1>Update prices from a photo</h1>
-    <p class="muted">For the CartCompare team. Upload a receipt, shelf tag, weekly ad, or a screenshot of a store's app. Review what was found, then save it to the price sheet.</p>
+    <p class="muted">For the CartCompare team. Approve receipts shared by shoppers, or upload your own photo. Nothing reaches the price sheet until you save it here.</p>
 
     <section class="card" aria-labelledby="h-pw">
       <h2 id="h-pw">Password</h2>
@@ -59,8 +63,16 @@
       </div>
     </section>
 
+    <section class="card" aria-labelledby="h-queue">
+      <h2 id="h-queue">Shopper receipts</h2>
+      <p class="muted" id="queue-note">Enter the password to see receipts waiting for review.</p>
+      <ul class="queue" id="queue"></ul>
+      <div class="actions"><button class="btn small secondary" id="queue-btn">Check for new receipts</button></div>
+      <div id="queue-msg" class="msg" role="status" aria-live="polite"></div>
+    </section>
+
     <section class="card" aria-labelledby="h-photo">
-      <h2 id="h-photo">1. Photo</h2>
+      <h2 id="h-photo">Or upload your own photo</h2>
       <label class="drop" id="drop">
         <input id="photo" type="file" accept="image/*" class="sr-only">
         <strong>📷 Choose a photo or screenshot</strong>
@@ -74,7 +86,8 @@
     </section>
 
     <section class="card" id="review" aria-labelledby="h-review" hidden>
-      <h2 id="h-review">2. Check what we found</h2>
+      <h2 id="h-review">Check what we found</h2>
+      <p class="from" id="from"></p>
       <div class="row">
         <div class="field">
           <label for="store">Store</label>
@@ -91,6 +104,7 @@
       <div class="actions">
         <button class="btn" id="save-btn">Save to price sheet</button>
         <button class="btn secondary" id="download-btn">Download updated sheet</button>
+        <button class="btn secondary" id="discard-btn" hidden>Discard this receipt</button>
       </div>
       <div id="save-msg" class="msg" role="status" aria-live="polite"></div>
     </section>
@@ -111,6 +125,8 @@
     let chains = [];       // [{ id: priceColumn, name }]
     let photo = null;      // { media_type, data }
     let found = [];        // items from the reader, with page state
+    let current = null;    // the shopper submission being reviewed, if any
+    let queue = [];
 
     // Remember the password on this device for convenience.
     try { $('pw').value = localStorage.getItem(PW_KEY) || ''; } catch (e) { /* ignore */ }
@@ -192,20 +208,102 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Reading failed.');
-        found = (data.items || []).map((it) => ({ ...it, on: it.row != null, choice: it.row != null ? String(it.row) : '' }));
-        $('store').value = data.store || '';
-        $('date').value = data.date || today();
-        renderFound();
-        $('review').hidden = false;
+        current = null;
+        startReview(data, 'From your photo.');
         show($('read-msg'), found.length ? 'Found ' + found.length + ' prices.' : 'No prices found. Try a clearer photo.', found.length ? 'ok' : 'err');
-        show($('save-msg'), '', '');
-        $('review').scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (err) {
         show($('read-msg'), err.message === 'prices.csv' ? "Couldn't load prices.csv." : err.message, 'err');
       } finally {
         btn.disabled = false;
       }
     });
+
+    // ---------- Shopper receipts ----------
+    const adminHeaders = () => ({ 'Content-Type': 'application/json', 'X-Admin-Password': $('pw').value });
+
+    async function loadQueue() {
+      if (!$('pw').value) { $('queue-note').textContent = 'Enter the password to see receipts waiting for review.'; return; }
+      show($('queue-msg'), 'Checking…', '');
+      try {
+        if (!sheet) await loadSheet();
+        const res = await fetch('/api/submissions', { headers: adminHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Couldn't load receipts.");
+        queue = data.submissions || [];
+        renderQueue(data.note);
+        show($('queue-msg'), '', '');
+      } catch (err) {
+        show($('queue-msg'), err.message, 'err');
+      }
+    }
+
+    function renderQueue(note) {
+      const ul = $('queue');
+      ul.innerHTML = '';
+      $('queue-note').textContent = note || (queue.length ? queue.length + ' waiting, newest first.' : 'No receipts waiting. 🎉');
+      for (const sub of queue) {
+        const li = document.createElement('li');
+        const info = document.createElement('div');
+        const chain = chains.find((c) => c.id === sub.store);
+        const strong = document.createElement('strong');
+        strong.textContent = (chain ? chain.name : 'Unknown store') + ' · ' + sub.items.length + ' prices';
+        const small = document.createElement('div');
+        small.className = 'muted';
+        small.textContent = (sub.date ? 'Receipt date ' + sub.date + ' · ' : '') + 'shared ' + new Date(sub.at).toLocaleString();
+        info.append(strong, small);
+        const btns = document.createElement('div');
+        btns.className = 'btns';
+        const review = Object.assign(document.createElement('button'), { className: 'btn small', textContent: 'Review' });
+        review.addEventListener('click', () => {
+          current = sub;
+          startReview({
+            store: sub.store,
+            date: sub.date,
+            items: sub.items.map((it) => {
+              const i = it.rowKey ? sheet.rows.findIndex((r) => rowKey(r) === it.rowKey) : -1;
+              return { ...it, row: i >= 0 ? i : null };
+            }),
+          }, 'From a shopper receipt shared ' + new Date(sub.at).toLocaleString() + '.');
+        });
+        const discard = Object.assign(document.createElement('button'), { className: 'btn small secondary', textContent: 'Discard' });
+        discard.addEventListener('click', () => finish(sub, 'discard'));
+        btns.append(review, discard);
+        li.append(info, btns);
+        ul.appendChild(li);
+      }
+    }
+
+    async function finish(sub, action) {
+      try {
+        const res = await fetch('/api/submissions', { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ id: sub.id, action }) });
+        if (!res.ok) throw new Error();
+        queue = queue.filter((q) => q.id !== sub.id);
+        renderQueue();
+        if (current && current.id === sub.id) {
+          current = null;
+          $('discard-btn').hidden = true;
+          if (action === 'discard') { $('review').hidden = true; found = []; }
+        }
+      } catch (e) {
+        show($('queue-msg'), "Couldn't update the queue. Try again.", 'err');
+      }
+    }
+
+    $('queue-btn').addEventListener('click', loadQueue);
+    $('pw').addEventListener('change', loadQueue);
+    $('discard-btn').addEventListener('click', () => { if (current) finish(current, 'discard'); });
+
+    function startReview(data, from) {
+      found = (data.items || []).map((it) => ({ ...it, on: it.row != null, choice: it.row != null ? String(it.row) : '' }));
+      $('store').value = data.store || '';
+      $('date').value = data.date || today();
+      $('from').textContent = from;
+      $('discard-btn').hidden = !current;
+      renderFound();
+      $('review').hidden = false;
+      show($('save-msg'), '', '');
+      $('review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     // ---------- Review ----------
     const label = (r) => r.item + (r.brand ? ' — ' + r.brand : '') + (r.size ? ' (' + r.size + ')' : '');
@@ -329,6 +427,7 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Saving failed.');
         if (data.csv) sheet = parseCSV(data.csv);
+        if (current) await finish(current, 'done');
         found = [];
         $('found').innerHTML = '';
         $('summary').textContent = '';
@@ -356,10 +455,12 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       sheet = next;
+      if (current) finish(current, 'done');
       show($('save-msg'), 'Downloaded prices.csv with ' + applied + ' new prices. Upload it to GitHub to update the site. You can keep adding photos; each download includes everything so far.', 'ok');
     });
 
-    loadSheet().catch(() => show($('read-msg'), "Couldn't load the price sheet. Refresh to try again.", 'err'));
+    loadSheet().then(() => { if ($('pw').value) loadQueue(); })
+      .catch(() => show($('read-msg'), "Couldn't load the price sheet. Refresh to try again.", 'err'));
   </script>
 </body>
 </html>

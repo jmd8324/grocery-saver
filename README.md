@@ -1,17 +1,25 @@
 # CartCompare
 
-Same groceries, smaller bill. CartCompare compares your shopping list across
-nearby stores and shows which one gives you the cheapest cart.
+Same groceries, smaller bill. CartCompare has two sides:
+
+- **Share a receipt** (`/upload.html`): anyone can upload a grocery receipt. Free, no account.
+  Claude reads the prices, you approve them, and they go into the price sheet.
+- **Compare your cart** (`/list.html`): build a shopping list and see which store has the cheapest total.
+  Public during early access; a login can be added later.
 
 ## What's here
 
 | File | What it does |
 | --- | --- |
-| `index.html` | The landing page: short description, how it works, and the waitlist form. |
+| `index.html` | The landing page: two big choices (share a receipt / compare your cart), how it works, and an email updates form. |
+| `upload.html` | Public receipt upload. Shows the shopper what was read; prices wait for your approval. |
+| `api/submit-receipt.js` | Reads a shopper's receipt with Claude and queues it for review. Keeps item names and prices only, never the photo. |
+| `api/submissions.js` | Lists and clears the review queue (password protected). |
+| `api/_reader.js` | Shared receipt-reading code used by both upload paths. |
 | `list.html` | The list builder: ZIP code, type or upload a photo/screenshot of a list, review items, pick loyalty programs and stores. |
 | `prices.csv` | The price sheet: one row per product, one column per store. Fill this in to power the comparison (see below). |
 | `compare.js` | Matches list items to the price sheet, applies member prices and totals each store. |
-| `update-prices.html` | Owner-only page: upload a receipt, shelf tag, weekly ad or store-app screenshot, review the prices Claude finds, and save them to `prices.csv`. |
+| `update-prices.html` | Owner-only page: approve shopper receipts, or upload your own photo, and save the prices to `prices.csv`. |
 | `sheet.js` | Reads, writes and updates `prices.csv` (shared by the update page and `api/save-prices.js`). |
 | `api/read-prices.js` | Reads prices from a photo with Claude and matches them to sheet rows (password protected). |
 | `api/save-prices.js` | Saves reviewed prices to `prices.csv` on GitHub, which redeploys the site (password protected). |
@@ -60,6 +68,17 @@ To edit by hand instead: when you're done, save or export it as **CSV** with the
 in the project (GitHub → the file → ✏️ edit, or **Add file → Upload files**). Vercel updates the site in about a minute.
 
 To add a product, add a row. To add a store, add it to `stores.json` with a `priceColumn`, then add that column here.
+
+## Shopper receipt uploads
+
+Needs **`ANTHROPIC_API_KEY`** and **Upstash Redis** (see "Turning on the waitlist"). Without Redis,
+the upload page says uploads aren't open yet. Redis holds the review queue and enforces spending limits.
+
+- Limits: 10 receipts per person per hour, and 300 per day for the whole site. Change the daily limit
+  with a `RECEIPT_DAILY_LIMIT` environment variable.
+- Uploaded receipts wait on `/update-prices.html` under **Shopper receipts**. Tap **Review**, fix or untick
+  anything wrong, then **Save**, or **Discard** junk. Waiting receipts are deleted after 60 days.
+- Privacy: the photo is never stored. Only item lines, prices, store and date are kept.
 
 ## Turning on the photo price updater (one-time setup)
 
@@ -145,6 +164,13 @@ Each score is the signup time (milliseconds since 1970).
 - [x] Total the list at each store and show the cheapest
 - [x] Show which items have no price yet
 - [ ] Handle "no exact match" items (e.g. suggest the store brand)
+
+**Phase 4b: Two sides**
+- [x] Landing page with two choices: share a receipt / compare your cart
+- [x] Public receipt uploads with an approval queue and spending limits
+- [ ] Connect Upstash Redis so uploads open
+- [ ] Add login for the compare side
+- [ ] Thank contributors (e.g. a count of receipts shared, or perks)
 
 **Phase 5: Launch**
 - [ ] Email the waitlist when the MVP is ready

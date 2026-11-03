@@ -91,7 +91,7 @@
 <body>
   <header class="site wrap narrow">
     <a class="logo" href="/">🛒 CartCompare</a>
-    <a href="/#waitlist">Join the waitlist</a>
+    <a href="/upload.html">Share a receipt</a>
   </header>
 
   <main class="wrap narrow">
@@ -479,7 +479,7 @@
       const t = new Date(d + 'T12:00:00');
       return isNaN(t) ? d : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
-    const waitlistLink = () => Object.assign(document.createElement('a'), { href: '/#waitlist', textContent: 'Join the waitlist' });
+    const uploadLink = () => Object.assign(document.createElement('a'), { href: '/upload.html', textContent: 'Share a receipt' });
 
     function storeDetails(r, itemCount, open) {
       const d = document.createElement('details');
@@ -515,9 +515,9 @@
       if (!res.ranked.length) {
         const card = el('div', 'card');
         card.append(el('h2', '', "We don't have prices for these items yet"),
-          el('p', 'muted', "We're collecting State College prices now, starting with the most common groceries. Your list is saved on this device."));
+          el('p', 'muted', "Prices come from receipts shared by State College shoppers, and we're just getting started. Your list is saved on this device."));
         const p = document.createElement('p');
-        p.append(waitlistLink(), " and we'll email you when your items are priced.");
+        p.append(uploadLink(), ' from your last grocery trip to help fill them in. It takes 10 seconds and no account.');
         card.appendChild(p);
         box.appendChild(card);
         return;
@@ -549,6 +549,11 @@
           : 'between ' + fmtDate(res.checked.from) + ' and ' + fmtDate(res.checked.to)) + '. Shelf prices change, so double-check in store.');
       }
       for (const t of fine) box.appendChild(el('p', 'fine', t));
+      if (res.unpriced.length || res.ranked.some((r) => r.missing.length)) {
+        const p = el('p', 'fine');
+        p.append('Missing prices? ', uploadLink(), ' to fill them in for everyone.');
+        box.appendChild(p);
+      }
       box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 

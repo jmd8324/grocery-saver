@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share a Receipt — CartCompare</title>
+  <meta name="description" content="Snap your grocery receipt to help State College shoppers see real prices. Free, no account needed.">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; margin: 8px 0 8px; }
+    .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 24px; }
+    .perks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; padding: 0; list-style: none; }
+    .perks li { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; }
+    section.card { margin-bottom: 20px; }
+
+    .drop {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+      border: 2px dashed var(--border); border-radius: 12px; padding: 32px 16px; text-align: center;
+      cursor: pointer; background: var(--surface-2);
+    }
+    .drop.over { border-color: var(--brand); }
+    .drop .big { font-size: 2.5rem; }
+    .drop img { max-width: 100%; max-height: 360px; border-radius: 8px; }
+    .field { display: grid; gap: 4px; margin-top: 16px; }
+    .field label { font-weight: 600; font-size: 0.95rem; }
+    select {
+      width: 100%; padding: 12px 14px; font-size: 1rem; font-family: inherit;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
+    }
+    .actions { margin-top: 16px; }
+    .actions .btn { width: 100%; }
+    .privacy { font-size: 0.9rem; color: var(--muted); margin: 12px 0 0; }
+
+    .thanks h2 { margin: 0 0 4px; font-size: 1.4rem; }
+    .thanks ul { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 4px; max-height: 320px; overflow: auto; }
+    .thanks li { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border); padding-top: 4px; }
+    .thanks li span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .next { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tips { margin: 0; padding-left: 20px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="site wrap narrow">
+    <a class="logo" href="/">🛒 CartCompare</a>
+    <a href="/list.html">Compare your cart</a>
+  </header>
+
+  <main class="wrap narrow">
+    <h1>Share a grocery receipt</h1>
+    <p class="lead">Every receipt shows real State College prices, so neighbors can find the cheapest store for their list.</p>
+    <ul class="perks">
+      <li>✅ Free</li><li>🙅 No account</li><li>⏱️ Takes 10 seconds</li>
+    </ul>
+
+    <section class="card" id="form-card">
+      <label class="drop" id="drop">
+        <input id="photo" type="file" accept="image/*" class="sr-only">
+        <span class="big">🧾</span>
+        <strong>Take or choose a photo of your receipt</strong>
+        <span class="muted">Lay it flat in good light. Long receipt? Fold it or share two photos.</span>
+        <img id="preview" alt="Preview of your receipt" hidden>
+      </label>
+
+      <div class="field">
+        <label for="store">Which store? <span class="muted">(optional, we can usually tell)</span></label>
+        <select id="store"><option value="">Not sure / let CartCompare figure it out</option></select>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="send-btn">Share receipt</button>
+      </div>
+      <div id="msg" class="msg" role="status" aria-live="polite"></div>
+      <p class="privacy">🔒 We only keep the item names and prices. Your photo isn't saved, and we never keep names, card numbers or loyalty numbers.</p>
+    </section>
+
+    <section class="card thanks" id="thanks" hidden aria-live="polite"></section>
+
+    <section class="card">
+      <strong>Also works with</strong>
+      <ul class="tips">
+        <li>Shelf price tags</li>
+        <li>Screenshots of a store's app or website showing prices</li>
+        <li>Weekly ad flyers</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">© <span id="year"></span> CartCompare · State College, PA</div>
+  </footer>
+
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    $('year').textContent = new Date().getFullYear();
+    const show = (text, kind) => { $('msg').textContent = text; $('msg').className = 'msg ' + (kind || ''); };
+    let photo = null;
+
+    fetch('stores.json').then((r) => r.json()).then((data) => {
+      const seen = new Set();
+      for (const s of data.stores) {
+        if (!s.priceColumn || seen.has(s.priceColumn)) continue;
+        seen.add(s.priceColumn);
+        $('store').append(new Option(s.chain, s.priceColumn));
+      }
+    }).catch(() => { /* store list is optional */ });
+
+    // Receipts have small print, so keep plenty of detail.
+    function resize(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const scale = Math.min(1, 2400 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          let dataUrl = c.toDataURL('image/jpeg', 0.85);
+          if (dataUrl.length > 3_900_000) dataUrl = c.toDataURL('image/jpeg', 0.65);
+          resolve(dataUrl);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("We couldn't open that image. Try a JPG or PNG.")); };
+        img.src = url;
+      });
+    }
+
+    async function onFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) return show('Please choose a photo.', 'err');
+      try {
+        const dataUrl = await resize(file);
+        photo = { media_type: 'image/jpeg', data: dataUrl.split(',')[1] };
+        $('preview').src = dataUrl;
+        $('preview').hidden = false;
+        show('Looks good. Tap "Share receipt".', '');
+      } catch (err) { show(err.message, 'err'); }
+    }
+    $('photo').addEventListener('change', (e) => onFile(e.target.files[0]));
+    const drop = $('drop');
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); onFile(e.dataTransfer.files[0]); });
+
+    const money = (n) => '$' + Number(n).toFixed(2);
+    const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+
+    function thank(data) {
+      const box = $('thanks');
+      box.innerHTML = '';
+      if (!data.count) {
+        box.append(el('h2', "Hmm, we couldn't find any prices"),
+          el('p', 'Try a sharper, flatter photo in good light, with the item lines clearly visible.', 'muted'));
+      } else {
+        box.append(el('h2', '🎉 Thank you!'),
+          el('p', 'We read ' + data.count + ' price' + (data.count === 1 ? '' : 's') + (data.store ? ' from ' + data.store : '') +
+            '. They\'ll show up for shoppers after a quick check.', 'muted'));
+        const ul = document.createElement('ul');
+        for (const it of data.items) {
+          const li = document.createElement('li');
+          const p = it.member_price && (!it.price || it.member_price < it.price) ? money(it.member_price) + ' with card' : money(it.price);
+          li.append(el('span', (it.brand ? it.brand + ' ' : '') + it.name), el('span', p));
+          ul.appendChild(li);
+        }
+        box.appendChild(ul);
+      }
+      const next = el('div', null, 'next');
+      const again = el('button', 'Share another receipt', 'btn');
+      again.addEventListener('click', () => { box.hidden = true; $('form-card').hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); });
+      next.append(again, Object.assign(el('a', 'Compare your cart →', 'btn secondary'), { href: '/list.html' }));
+      box.appendChild(next);
+      $('form-card').hidden = true;
+      box.hidden = false;
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    $('send-btn').addEventListener('click', async () => {
+      if (!photo) return show('Choose a photo of your receipt first.', 'err');
+      const btn = $('send-btn');
+      btn.disabled = true;
+      show('Reading your receipt… this takes about 10–30 seconds.', '');
+      try {
+        const res = await fetch('/api/submit-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: photo, store: $('store').value || undefined }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+        show('', '');
+        photo = null;
+        $('photo').value = '';
+        $('preview').hidden = true;
+        thank(data);
+      } catch (err) {
+        show(err.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
