@@ -13,14 +13,14 @@
     { "id": "sams-club", "name": "Sam's Club Membership", "chain": "Sam's Club", "cost": "Paid membership", "note": "Required to shop at Sam's Club" }
   ],
   "stores": [
-    { "id": "giant-s-atherton", "chain": "GIANT", "name": "GIANT", "address": "2121 S Atherton St", "zip": "16801", "loyalty": "giant-choice" },
-    { "id": "giant-northland", "chain": "GIANT", "name": "GIANT (Northland Center)", "address": "255 Northland Center", "zip": "16803", "loyalty": "giant-choice" },
-    { "id": "weis-westerly", "chain": "Weis Markets", "name": "Weis Markets", "address": "560 Westerly Pkwy", "zip": "16801", "loyalty": "weis-rewards" },
-    { "id": "wegmans", "chain": "Wegmans", "name": "Wegmans", "address": "345 Colonnade Blvd", "zip": "16803", "loyalty": "wegmans-shoppers-club" },
-    { "id": "target-downtown", "chain": "Target", "name": "Target (Downtown)", "address": "201 W Beaver Ave", "zip": "16801", "loyalty": "target-circle" },
-    { "id": "walmart", "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": "walmart-plus" },
-    { "id": "aldi", "chain": "ALDI", "name": "ALDI", "address": "1798 N Atherton St", "zip": "16803", "loyalty": null },
-    { "id": "trader-joes", "chain": "Trader Joe's", "name": "Trader Joe's", "address": "243 Patriot Ln", "zip": "16803", "loyalty": null },
-    { "id": "sams-club", "chain": "Sam's Club", "name": "Sam's Club", "address": "381 Benner Pike", "zip": "16801", "loyalty": "sams-club" }
+    { "id": "giant-s-atherton", "chain": "GIANT", "name": "GIANT", "address": "2121 S Atherton St", "zip": "16801", "loyalty": "giant-choice", "priceColumn": "giant" },
+    { "id": "giant-northland", "chain": "GIANT", "name": "GIANT (Northland Center)", "address": "255 Northland Center", "zip": "16803", "loyalty": "giant-choice", "priceColumn": "giant" },
+    { "id": "weis-westerly", "chain": "Weis Markets", "name": "Weis Markets", "address": "560 Westerly Pkwy", "zip": "16801", "loyalty": "weis-rewards", "priceColumn": "weis" },
+    { "id": "wegmans", "chain": "Wegmans", "name": "Wegmans", "address": "345 Colonnade Blvd", "zip": "16803", "loyalty": "wegmans-shoppers-club", "priceColumn": "wegmans" },
+    { "id": "target-downtown", "chain": "Target", "name": "Target (Downtown)", "address": "201 W Beaver Ave", "zip": "16801", "loyalty": "target-circle", "priceColumn": "target" },
+    { "id": "walmart", "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": "walmart-plus", "priceColumn": "walmart" },
+    { "id": "aldi", "chain": "ALDI", "name": "ALDI", "address": "1798 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "aldi" },
+    { "id": "trader-joes", "chain": "Trader Joe's", "name": "Trader Joe's", "address": "243 Patriot Ln", "zip": "16803", "loyalty": null, "priceColumn": "trader_joes" },
+    { "id": "sams-club", "chain": "Sam's Club", "name": "Sam's Club", "address": "381 Benner Pike", "zip": "16801", "loyalty": "sams-club", "priceColumn": "sams_club", "membershipRequired": true }
   ]
 }
