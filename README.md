@@ -72,10 +72,10 @@ To add a product, add a row. To add a store, add it to `stores.json` with a `pri
 ## Shopper receipt uploads
 
 Needs **`ANTHROPIC_API_KEY`** and **Upstash Redis** (see "Turning on the waitlist"). Without Redis,
-the upload page says uploads aren't open yet. Redis holds the review queue and enforces spending limits.
+the upload page says uploads aren't open yet. Redis holds the review queue.
 
-- Limits: 10 receipts per person per hour, and 300 per day for the whole site. Change the daily limit
-  with a `RECEIPT_DAILY_LIMIT` environment variable.
+- **No upload limits yet.** Each upload is a small paid Claude request, so set a monthly spend limit in the
+  Claude Console (platform.claude.com → Settings → Limits) as a safety net.
 - Uploaded receipts wait on `/update-prices.html` under **Shopper receipts**. Tap **Review**, fix or untick
   anything wrong, then **Save**, or **Discard** junk. Waiting receipts are deleted after 60 days.
 - Privacy: the photo is never stored. Only item lines, prices, store and date are kept.
@@ -167,7 +167,8 @@ Each score is the signup time (milliseconds since 1970).
 
 **Phase 4b: Two sides**
 - [x] Landing page with two choices: share a receipt / compare your cart
-- [x] Public receipt uploads with an approval queue and spending limits
+- [x] Public receipt uploads with an approval queue
+- [ ] Add upload limits if bots or heavy use show up
 - [ ] Connect Upstash Redis so uploads open
 - [ ] Add login for the compare side
 - [ ] Thank contributors (e.g. a count of receipts shared, or perks)

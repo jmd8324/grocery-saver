@@ -4,14 +4,13 @@
 // reaches the price sheet. The photo itself is never stored.
 //
 // Body: { image: { media_type, data }, store?: "giant" }
-// Needs ANTHROPIC_API_KEY and Upstash Redis (for the queue and spending limits).
+// Needs ANTHROPIC_API_KEY and Upstash Redis (for the review queue).
+// No upload limits for now; set a monthly spend limit in the Claude Console as a safety net.
 
 import { randomUUID } from 'node:crypto';
-import { redis, redisConfigured, overLimit } from './_redis.js';
+import { redis, redisConfigured } from './_redis.js';
 import { readPrices, imageProblem, loadSheetAndStores, ReaderError, safeParse } from './_reader.js';
 
-const PER_PERSON_PER_HOUR = 10;
-const DAILY_LIMIT = Number(process.env.RECEIPT_DAILY_LIMIT) || 300;
 const KEEP_DAYS = 60;
 
 export default async function handler(req, res) {
@@ -27,22 +26,6 @@ export default async function handler(req, res) {
   const body = typeof req.body === 'string' ? safeParse(req.body) : req.body || {};
   const problem = imageProblem(body.image);
   if (problem) return res.status(400).json({ error: problem });
-
-  // Each read costs money: cap per person and for the whole site per day.
-  if (await overLimit(req, 'receipt', PER_PERSON_PER_HOUR, 60 * 60)) {
-    return res.status(429).json({ error: "Thanks for all the receipts! You've hit the hourly limit. Please try again later." });
-  }
-  try {
-    const dayKey = 'receipts:day:' + new Date().toISOString().slice(0, 10);
-    const today = await redis(['INCR', dayKey]);
-    if (today === 1) await redis(['EXPIRE', dayKey, 2 * 24 * 60 * 60]);
-    if (today > DAILY_LIMIT) {
-      return res.status(429).json({ error: "We've had a lot of receipts today. Please try again tomorrow." });
-    }
-  } catch (err) {
-    console.error('submit-receipt limit check:', err.message);
-    return res.status(503).json({ error: "Receipt uploads aren't working right now. Please try again later." });
-  }
 
   let sheet, stores;
   try {
