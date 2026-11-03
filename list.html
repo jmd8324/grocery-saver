@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Build Your List — CartCompare</title>
+  <meta name="description" content="Type your grocery list or upload a photo or screenshot. CartCompare matches the generic version unless you name a brand.">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; margin: 8px 0 8px; }
+    .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 32px; }
+    section.step { margin-bottom: 24px; }
+    .step h2 { font-size: 1.2rem; margin: 0 0 4px; }
+    .step h2 .num { color: var(--brand); margin-right: 6px; }
+    .step > p { margin: 0 0 16px; }
+
+    .zip-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .zip-row input { width: 140px; }
+
+    .tabs { display: flex; gap: 4px; background: var(--surface-2); border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+    .tabs button {
+      flex: 1; padding: 10px; border: 0; border-radius: 8px; background: transparent;
+      color: var(--muted); font: inherit; font-weight: 600; cursor: pointer;
+    }
+    .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+    textarea { min-height: 180px; resize: vertical; }
+
+    .drop {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+      border: 2px dashed var(--border); border-radius: 12px; padding: 28px 16px; text-align: center;
+      cursor: pointer; background: var(--surface-2);
+    }
+    .drop.over { border-color: var(--brand); }
+    .drop img { max-width: 100%; max-height: 280px; border-radius: 8px; }
+    .drop .big { font-size: 2rem; }
+
+    .rule { display: grid; gap: 10px; margin: 16px 0 0; padding: 16px; background: var(--surface-2); border-radius: 12px; font-size: 0.95rem; }
+    .rule-row { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .rule-row code { font-family: inherit; font-weight: 600; }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+    ul.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    ul.items li {
+      display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+      padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    }
+    .item-name { font-weight: 600; }
+    .item-name .qty { color: var(--muted); font-weight: 400; }
+    .item-orig { grid-column: 1 / -1; font-size: 0.85rem; color: var(--muted); }
+    .item-ctrl { display: flex; gap: 8px; align-items: center; }
+    .remove { background: none; border: 0; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 0 4px; }
+    .remove:hover { color: var(--error); }
+    .add-row { display: flex; gap: 8px; margin-top: 12px; }
+    .add-row input { flex: 1; }
+
+    .checks { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .check {
+      display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer;
+    }
+    .check:has(input:checked) { border-color: var(--brand); background: var(--surface-2); }
+    .check input { margin-top: 5px; width: 18px; height: 18px; accent-color: var(--brand); flex: none; }
+    .check strong { display: block; }
+    .check small { color: var(--muted); display: block; line-height: 1.4; }
+    .empty { color: var(--muted); font-style: italic; }
+    .done { margin-top: 32px; text-align: center; }
+  </style>
+</head>
+<body>
+  <header class="site wrap narrow">
+    <a class="logo" href="/">🛒 CartCompare</a>
+    <a href="/#waitlist">Join the waitlist</a>
+  </header>
+
+  <main class="wrap narrow">
+    <h1>Build your grocery list</h1>
+    <p class="lead">Tell us what you need and which store cards you have. We're starting in <strong>State College, PA</strong>.</p>
+
+    <!-- Step 1: Location -->
+    <section class="step card" aria-labelledby="s1">
+      <h2 id="s1"><span class="num">1</span>Where do you shop?</h2>
+      <p class="muted">We're launching around State College first.</p>
+      <div class="zip-row">
+        <label for="zip" class="sr-only">ZIP code</label>
+        <input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" value="16801">
+        <span id="zip-msg" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- Step 2: The list -->
+    <section class="step card" aria-labelledby="s2">
+      <h2 id="s2"><span class="num">2</span>Add your list</h2>
+      <p class="muted">Type it out, or upload a photo of a paper list or a screenshot from your notes app.</p>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-type" aria-selected="true" aria-controls="panel-type">⌨️ Type it</button>
+        <button role="tab" id="tab-photo" aria-selected="false" aria-controls="panel-photo">📷 Photo or screenshot</button>
+      </div>
+
+      <div id="panel-type" role="tabpanel" aria-labelledby="tab-type">
+        <label for="list-text" class="sr-only">Grocery list</label>
+        <textarea id="list-text" placeholder="One item per line, for example:&#10;milk&#10;2 dozen eggs&#10;Cheerios&#10;bananas&#10;Heinz ketchup"></textarea>
+      </div>
+
+      <div id="panel-photo" role="tabpanel" aria-labelledby="tab-photo" hidden>
+        <label class="drop" id="drop">
+          <input id="list-photo" type="file" accept="image/*" class="sr-only">
+          <span class="big">🖼️</span>
+          <strong>Choose a photo or screenshot</strong>
+          <span class="muted">or drag it here. A clear, well-lit picture works best.</span>
+          <img id="photo-preview" alt="Preview of your list" hidden>
+        </label>
+      </div>
+
+      <div class="rule" aria-label="How brands are matched">
+        <strong>How we match items</strong>
+        <div class="rule-row"><span class="badge generic">Any brand</span><span>If you just write <code>milk</code> or <code>paper towels</code>, we compare the <strong>cheapest generic or store-brand</strong> version at each store.</span></div>
+        <div class="rule-row"><span class="badge brand">Brand</span><span>If you name a brand, like <code>Heinz ketchup</code> or <code>Cheerios</code>, we only compare <strong>that exact brand</strong>.</span></div>
+        <span class="muted">You can change any item below before comparing.</span>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="read-btn">Read my list</button>
+      </div>
+      <div id="read-msg" class="msg" role="status" aria-live="polite"></div>
+    </section>
+
+    <!-- Step 3: Review items -->
+    <section class="step card" aria-labelledby="s3">
+      <h2 id="s3"><span class="num">3</span>Check your items</h2>
+      <p class="muted">Tap a badge to switch between "any brand" and "this brand only".</p>
+      <ul class="items" id="items"></ul>
+      <p class="empty" id="items-empty">Your items will show up here.</p>
+      <form class="add-row" id="add-form">
+        <label for="add-input" class="sr-only">Add an item</label>
+        <input id="add-input" type="text" placeholder="Add an item…">
+        <button class="btn small secondary" type="submit">Add</button>
+      </form>
+    </section>
+
+    <!-- Step 4: Loyalty programs -->
+    <section class="step card" aria-labelledby="s4">
+      <h2 id="s4"><span class="num">4</span>Your loyalty programs</h2>
+      <p class="muted">Pick the cards and memberships you have so we can use member prices. Not sure? Leave it blank and we'll show regular prices.</p>
+      <div class="checks" id="loyalty"></div>
+    </section>
+
+    <!-- Step 5: Stores -->
+    <section class="step card" aria-labelledby="s5">
+      <h2 id="s5"><span class="num">5</span>Stores to compare</h2>
+      <p class="muted">Uncheck any store you don't want to shop at.</p>
+      <div class="checks" id="stores"></div>
+    </section>
+
+    <div class="done">
+      <button class="btn" id="compare-btn">Compare prices</button>
+      <div id="compare-msg" class="msg" role="status" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">© <span id="year"></span> CartCompare · Store info for State College, PA</div>
+  </footer>
+
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const SAVE_KEY = 'cartcompare:list:v1';
+    $('year').textContent = new Date().getFullYear();
+
+    // ---------- State ----------
+    let state = { zip: '16801', items: [], loyalty: [], excludedStores: [] };
+    let area = null;
+    let photoData = null; // { media_type, data } after resizing
+
+    function load() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+        if (saved && Array.isArray(saved.items)) state = Object.assign(state, saved);
+      } catch (e) { /* storage unavailable: start fresh */ }
+    }
+    function save() {
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+    }
+
+    function show(el, text, kind) { el.textContent = text; el.className = 'msg ' + (kind || ''); }
+
+    // ---------- Step 1: ZIP ----------
+    function checkZip() {
+      const zip = $('zip').value.trim();
+      state.zip = zip;
+      save();
+      if (!area) return;
+      if (!/^\d{5}$/.test(zip)) {
+        $('zip-msg').textContent = 'Enter a 5-digit ZIP code.';
+      } else if (area.zips.includes(zip)) {
+        $('zip-msg').textContent = '✅ ' + area.name + ' area';
+      } else {
+        $('zip-msg').textContent = "We're not in your area yet — showing State College stores for now.";
+      }
+    }
+    $('zip').addEventListener('input', checkZip);
+
+    // ---------- Step 2: Tabs ----------
+    let mode = 'type';
+    function setTab(next) {
+      mode = next;
+      $('tab-type').setAttribute('aria-selected', String(next === 'type'));
+      $('tab-photo').setAttribute('aria-selected', String(next === 'photo'));
+      $('panel-type').hidden = next !== 'type';
+      $('panel-photo').hidden = next !== 'photo';
+    }
+    $('tab-type').addEventListener('click', () => setTab('type'));
+    $('tab-photo').addEventListener('click', () => setTab('photo'));
+
+    // ---------- Step 2: Photo upload ----------
+    // Shrink big phone photos before upload so they stay fast and under size limits.
+    function resizeImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const max = 1600;
+          const scale = Math.min(1, max / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ dataUrl, media_type: 'image/jpeg', data: dataUrl.split(',')[1] });
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("We couldn't open that image. Try a JPG or PNG.")); };
+        img.src = url;
+      });
+    }
+    async function handleFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { show($('read-msg'), 'Please choose an image file.', 'err'); return; }
+      try {
+        const out = await resizeImage(file);
+        photoData = { media_type: out.media_type, data: out.data };
+        $('photo-preview').src = out.dataUrl;
+        $('photo-preview').hidden = false;
+        show($('read-msg'), 'Photo ready. Tap "Read my list".', '');
+      } catch (err) {
+        show($('read-msg'), err.message, 'err');
+      }
+    }
+    $('list-photo').addEventListener('change', (e) => handleFile(e.target.files[0]));
+    const drop = $('drop');
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault(); drop.classList.remove('over');
+      handleFile(e.dataTransfer.files[0]);
+    });
+
+    // ---------- Local backup parser (used if the reader service is unavailable) ----------
+    const KNOWN_BRANDS = ['Cheerios','Heinz','Kraft','Oreo','Coca-Cola','Coke','Pepsi','Doritos','Lay\'s','Tropicana','Chobani',
+      'Barilla','Skippy','Jif','Hellmann\'s','Folgers','Dunkin','Starbucks','Tide','Bounty','Charmin','Clorox','Dawn','Cascade',
+      'Kellogg\'s','Frosted Flakes','Cap\'n Crunch','Quaker','Ritz','Goldfish','Cheez-It','Pringles','Ben & Jerry\'s','Breyers',
+      'Horizon','Fairlife','Land O Lakes','Philadelphia','Tillamook','Oscar Mayer','Ball Park','Hormel','Tyson','Perdue',
+      'Nature Valley','Clif','Gatorade','Powerade','Poland Spring','Dasani','Ragu','Prego','Campbell\'s','Progresso','Lipton'];
+    function localParse(text) {
+      return text.split(/\n|,/).map((line) => line.replace(/^\s*([-*•▢☐☑✓✔]|\[\s?[xX]?\s?\]|\d+[.)])\s*/, '').trim())
+        .filter(Boolean)
+        .map((line) => {
+          const m = line.match(/^(\d+(?:\.\d+)?\s*(?:x|dozen|doz|lb|lbs|oz|gal|gallons?|pack|pk|cans?|bags?|boxes?|bottles?)?)\s+(.*)$/i);
+          const quantity = m ? m[1].trim() : null;
+          const rest = m ? m[2] : line;
+          let brand = null;
+          let name = rest;
+          for (const b of KNOWN_BRANDS) {
+            const re = new RegExp('\\b' + b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+            if (re.test(rest)) { brand = b; name = rest.replace(re, '').replace(/\s+/g, ' ').trim(); break; }
+          }
+          // A list item that is only a brand ("Cheerios") keeps the brand as its name.
+          return { name: (name || rest).toLowerCase(), brand, quantity, original: line };
+        });
+    }
+
+    // ---------- Step 2: Read the list ----------
+    $('read-btn').addEventListener('click', async () => {
+      const text = $('list-text').value.trim();
+      const body = mode === 'photo' ? (photoData ? { image: photoData } : null) : (text ? { text } : null);
+      if (!body) {
+        show($('read-msg'), mode === 'photo' ? 'Choose a photo or screenshot first.' : 'Type at least one item first.', 'err');
+        return;
+      }
+      const btn = $('read-btn');
+      btn.disabled = true;
+      show($('read-msg'), mode === 'photo' ? 'Reading your photo… this can take a few seconds.' : 'Reading your list…', '');
+      try {
+        const res = await fetch('/api/parse-list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Something went wrong reading your list.');
+        addItems(data.items || []);
+        show($('read-msg'), data.items && data.items.length
+          ? 'Found ' + data.items.length + ' item' + (data.items.length === 1 ? '' : 's') + '. Check them below.'
+          : "We couldn't find any grocery items in that. Try another photo or type your list.", data.items && data.items.length ? 'ok' : 'err');
+      } catch (err) {
+        if (mode === 'type') {
+          const items = localParse(text);
+          addItems(items);
+          show($('read-msg'), 'Added ' + items.length + ' items using our basic reader. Double-check the brands below.', 'ok');
+        } else {
+          show($('read-msg'), err.message + ' You can type your list instead.', 'err');
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ---------- Step 3: Items ----------
+    function addItems(items) {
+      for (const it of items) {
+        if (!it || !it.name) continue;
+        state.items.push({
+          id: Math.random().toString(36).slice(2, 10),
+          name: String(it.name),
+          brand: it.brand ? String(it.brand) : null,
+          quantity: it.quantity ? String(it.quantity) : null,
+          original: it.original ? String(it.original) : null,
+          exactBrand: Boolean(it.brand),
+        });
+      }
+      save();
+      renderItems();
+    }
+
+    function renderItems() {
+      const ul = $('items');
+      ul.innerHTML = '';
+      $('items-empty').hidden = state.items.length > 0;
+      for (const it of state.items) {
+        const li = document.createElement('li');
+
+        const name = document.createElement('div');
+        name.className = 'item-name';
+        const showBrand = it.exactBrand && it.brand && it.brand.toLowerCase() !== it.name.toLowerCase();
+        name.textContent = showBrand ? it.brand + ' ' + it.name : (it.exactBrand && it.brand ? it.brand : it.name);
+        if (it.quantity) {
+          const q = document.createElement('span');
+          q.className = 'qty';
+          q.textContent = ' · ' + it.quantity;
+          name.appendChild(q);
+        }
+
+        const ctrl = document.createElement('div');
+        ctrl.className = 'item-ctrl';
+        const badge = document.createElement('button');
+        badge.type = 'button';
+        badge.className = 'badge ' + (it.exactBrand ? 'brand' : 'generic');
+        badge.style.border = '0';
+        badge.style.cursor = 'pointer';
+        badge.textContent = it.exactBrand ? (it.brand || 'Brand') + ' only' : 'Any brand';
+        badge.title = 'Switch between any brand and a specific brand';
+        badge.addEventListener('click', () => {
+          if (!it.exactBrand && !it.brand) {
+            const b = prompt('Which brand do you want for "' + it.name + '"?');
+            if (!b || !b.trim()) return;
+            it.brand = b.trim();
+          }
+          it.exactBrand = !it.exactBrand;
+          save(); renderItems();
+        });
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove';
+        remove.setAttribute('aria-label', 'Remove ' + it.name);
+        remove.textContent = '×';
+        remove.addEventListener('click', () => {
+          state.items = state.items.filter((x) => x.id !== it.id);
+          save(); renderItems();
+        });
+        ctrl.append(badge, remove);
+        li.append(name, ctrl);
+
+        if (it.original && it.original.toLowerCase() !== ((it.quantity ? it.quantity + ' ' : '') + (it.brand ? it.brand + ' ' : '') + it.name).toLowerCase()) {
+          const orig = document.createElement('div');
+          orig.className = 'item-orig';
+          orig.textContent = 'From your list: "' + it.original + '"';
+          li.appendChild(orig);
+        }
+        ul.appendChild(li);
+      }
+    }
+
+    $('add-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $('add-input').value.trim();
+      if (!v) return;
+      addItems(localParse(v));
+      $('add-input').value = '';
+    });
+
+    // ---------- Steps 4 & 5: Loyalty programs and stores ----------
+    function checkCard(id, title, detail, checked, onChange) {
+      const label = document.createElement('label');
+      label.className = 'check';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = checked;
+      input.addEventListener('change', () => onChange(input.checked));
+      const text = document.createElement('span');
+      const strong = document.createElement('strong');
+      strong.textContent = title;
+      const small = document.createElement('small');
+      small.textContent = detail;
+      text.append(strong, small);
+      label.append(input, text);
+      return label;
+    }
+
+    function renderStoresAndLoyalty(data) {
+      const loyaltyBox = $('loyalty');
+      loyaltyBox.innerHTML = '';
+      for (const p of data.loyaltyPrograms) {
+        loyaltyBox.appendChild(checkCard(p.id, p.name, p.chain + ' · ' + p.cost + ' — ' + p.note, state.loyalty.includes(p.id), (on) => {
+          state.loyalty = on ? [...new Set([...state.loyalty, p.id])] : state.loyalty.filter((x) => x !== p.id);
+          save();
+        }));
+      }
+      const storeBox = $('stores');
+      storeBox.innerHTML = '';
+      const programName = Object.fromEntries(data.loyaltyPrograms.map((p) => [p.id, p.name]));
+      for (const s of data.stores) {
+        const card = s.loyalty ? 'Card: ' + programName[s.loyalty] : 'No card needed';
+        storeBox.appendChild(checkCard(s.id, s.name, s.address + ', State College ' + s.zip + ' · ' + card, !state.excludedStores.includes(s.id), (on) => {
+          state.excludedStores = on ? state.excludedStores.filter((x) => x !== s.id) : [...new Set([...state.excludedStores, s.id])];
+          save();
+        }));
+      }
+    }
+
+    // ---------- Compare ----------
+    $('compare-btn').addEventListener('click', () => {
+      if (!state.items.length) {
+        show($('compare-msg'), 'Add at least one item to your list first.', 'err');
+        return;
+      }
+      save();
+      $('compare-msg').className = 'msg ok';
+      $('compare-msg').innerHTML = '';
+      $('compare-msg').append(
+        'Your list is saved on this device. Live price comparison is coming soon — ',
+        Object.assign(document.createElement('a'), { href: '/#waitlist', textContent: 'join the waitlist' }),
+        " and we'll tell you the moment it's ready."
+      );
+    });
+
+    // ---------- Start ----------
+    load();
+    $('zip').value = state.zip || '16801';
+    renderItems();
+    fetch('stores.json')
+      .then((r) => r.json())
+      .then((data) => { area = data.area; renderStoresAndLoyalty(data); checkZip(); })
+      .catch(() => { $('stores').textContent = "Couldn't load stores. Refresh to try again."; });
+  })();
+  </script>
+</body>
+</html>

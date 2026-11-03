@@ -1,0 +1,26 @@
+{
+  "area": {
+    "name": "State College, PA",
+    "zips": ["16801", "16802", "16803", "16804", "16805"],
+    "defaultZip": "16801"
+  },
+  "loyaltyPrograms": [
+    { "id": "giant-choice", "name": "GIANT Choice Rewards", "chain": "GIANT", "cost": "Free", "note": "Card prices plus gas points" },
+    { "id": "weis-rewards", "name": "Weis Rewards", "chain": "Weis Markets", "cost": "Free", "note": "Card prices plus points toward groceries or gas" },
+    { "id": "wegmans-shoppers-club", "name": "Wegmans Shoppers Club", "chain": "Wegmans", "cost": "Free", "note": "Digital coupons and member prices" },
+    { "id": "target-circle", "name": "Target Circle", "chain": "Target", "cost": "Free", "note": "Circle deals and offers" },
+    { "id": "walmart-plus", "name": "Walmart+", "chain": "Walmart", "cost": "Paid membership", "note": "Free delivery and fuel discounts; shelf prices are the same" },
+    { "id": "sams-club", "name": "Sam's Club Membership", "chain": "Sam's Club", "cost": "Paid membership", "note": "Required to shop at Sam's Club" }
+  ],
+  "stores": [
+    { "id": "giant-s-atherton", "chain": "GIANT", "name": "GIANT", "address": "2121 S Atherton St", "zip": "16801", "loyalty": "giant-choice" },
+    { "id": "giant-northland", "chain": "GIANT", "name": "GIANT (Northland Center)", "address": "255 Northland Center", "zip": "16803", "loyalty": "giant-choice" },
+    { "id": "weis-westerly", "chain": "Weis Markets", "name": "Weis Markets", "address": "560 Westerly Pkwy", "zip": "16801", "loyalty": "weis-rewards" },
+    { "id": "wegmans", "chain": "Wegmans", "name": "Wegmans", "address": "345 Colonnade Blvd", "zip": "16803", "loyalty": "wegmans-shoppers-club" },
+    { "id": "target-downtown", "chain": "Target", "name": "Target (Downtown)", "address": "201 W Beaver Ave", "zip": "16801", "loyalty": "target-circle" },
+    { "id": "walmart", "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": "walmart-plus" },
+    { "id": "aldi", "chain": "ALDI", "name": "ALDI", "address": "1798 N Atherton St", "zip": "16803", "loyalty": null },
+    { "id": "trader-joes", "chain": "Trader Joe's", "name": "Trader Joe's", "address": "243 Patriot Ln", "zip": "16803", "loyalty": null },
+    { "id": "sams-club", "chain": "Sam's Club", "name": "Sam's Club", "address": "381 Benner Pike", "zip": "16801", "loyalty": "sams-club" }
+  ]
+}

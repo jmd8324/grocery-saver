@@ -4,3 +4,6 @@
 # Secrets and local settings (never upload these)
 .env
 .env.*
+
+# Dependencies
+node_modules/
