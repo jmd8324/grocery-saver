@@ -11,6 +11,10 @@ nearby stores and shows which one gives you the cheapest cart.
 | `list.html` | The list builder: ZIP code, type or upload a photo/screenshot of a list, review items, pick loyalty programs and stores. |
 | `prices.csv` | The price sheet: one row per product, one column per store. Fill this in to power the comparison (see below). |
 | `compare.js` | Matches list items to the price sheet, applies member prices and totals each store. |
+| `update-prices.html` | Owner-only page: upload a receipt, shelf tag, weekly ad or store-app screenshot, review the prices Claude finds, and save them to `prices.csv`. |
+| `sheet.js` | Reads, writes and updates `prices.csv` (shared by the update page and `api/save-prices.js`). |
+| `api/read-prices.js` | Reads prices from a photo with Claude and matches them to sheet rows (password protected). |
+| `api/save-prices.js` | Saves reviewed prices to `prices.csv` on GitHub, which redeploys the site (password protected). |
 | `stores.json` | The State College, PA stores and loyalty programs shown on the list builder. Edit this to add or fix stores. |
 | `styles.css` | Colors and styles shared by every page (light and dark mode). |
 | `api/waitlist.js` | Saves waitlist emails to the database. |
@@ -48,10 +52,31 @@ photos need the reader.
 Blank cells are fine. Each store's results show how many items were priced, and stores with more of
 the list priced are ranked first so missing items can't make a store look cheaper.
 
-When you're done, save or export it as **CSV** with the same name, `prices.csv`, and replace the file
+**Faster: update prices from photos.** Open `/update-prices.html` (setup below), upload a photo of a
+receipt, shelf tag, weekly ad, or a screenshot of the store's app, check what it found, and save.
+One receipt can fill 20–40 prices.
+
+To edit by hand instead: when you're done, save or export it as **CSV** with the same name, `prices.csv`, and replace the file
 in the project (GitHub → the file → ✏️ edit, or **Add file → Upload files**). Vercel updates the site in about a minute.
 
 To add a product, add a row. To add a store, add it to `stores.json` with a `priceColumn`, then add that column here.
+
+## Turning on the photo price updater (one-time setup)
+
+1. **Pick a password.** In Vercel → **Settings** → **Environment Variables**, add `ADMIN_PASSWORD`
+   with a long password only you know. (Production and Preview.)
+2. **Let it save to GitHub** (optional, but saves you uploading files by hand):
+   1. On GitHub: your profile picture → **Settings** → **Developer settings** → **Personal access tokens** →
+      **Fine-grained tokens** → **Generate new token**.
+   2. Name it `CartCompare prices`, set an expiration, and under **Repository access** pick
+      **Only select repositories** → `grocery-saver`.
+   3. Under **Permissions** → **Repository permissions**, set **Contents** to **Read and write**. Leave everything else.
+   4. **Generate token**, copy it, and add it in Vercel as `GITHUB_TOKEN` (Production and Preview).
+3. **Redeploy**, open `/update-prices.html`, and enter your password.
+
+Without `GITHUB_TOKEN`, use **Download updated sheet** and upload the file to GitHub yourself.
+Each save is a normal commit to `main` named like "Update 24 prices (GIANT 2026-11-03)", so you can see
+or undo any change in the repo's history. Reading a photo uses the same `ANTHROPIC_API_KEY` as the list reader.
 
 ## Turning on the waitlist (one-time setup)
 
@@ -109,7 +134,9 @@ Each score is the signup time (milliseconds since 1970).
 - [x] Pick a starting city: State College, PA
 - [x] Start with hand-collected prices (no public price APIs for GIANT, Weis or Wegmans)
 - [x] Simple data model: `prices.csv` (products × stores, member prices, date checked)
-- [ ] Fill in prices for the ~60 starter items
+- [x] Photo price updater: receipts, shelf tags, weekly ads and app screenshots → price sheet
+- [ ] Fill in prices for the ~60 starter items (one receipt per store gets most of the way)
+- [ ] Later: let shoppers upload their receipts to keep prices fresh
 - [ ] Later: apply to official data programs (Walmart, Target, Instacart) once there are users
 
 **Phase 4: First working version (MVP)**

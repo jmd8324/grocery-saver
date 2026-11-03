@@ -1,5 +1,10 @@
 {
   "functions": {
-    "api/parse-list.js": { "maxDuration": 60 }
+    "api/parse-list.js": {
+      "maxDuration": 60
+    },
+    "api/read-prices.js": {
+      "maxDuration": 60
+    }
   }
 }

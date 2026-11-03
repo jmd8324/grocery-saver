@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Update Prices — CartCompare</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.2; margin: 8px 0; }
+    section.card { margin-bottom: 20px; }
+    .card h2 { font-size: 1.15rem; margin: 0 0 8px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+    .field { display: grid; gap: 4px; flex: 1 1 180px; }
+    .field label { font-size: 0.9rem; font-weight: 600; }
+    select, input[type="date"], input[type="password"], input[type="number"] {
+      width: 100%; padding: 10px 12px; font-size: 1rem; font-family: inherit;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
+    }
+    .drop {
+      display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+      border: 2px dashed var(--border); border-radius: 12px; padding: 24px 16px; cursor: pointer; background: var(--surface-2);
+    }
+    .drop.over { border-color: var(--brand); }
+    .drop img { max-width: 100%; max-height: 320px; border-radius: 8px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+    .found { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+    .found li {
+      display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; padding: 12px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    }
+    .found li.off { opacity: 0.55; }
+    .found input[type="checkbox"] { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--brand); }
+    .found .body { display: grid; gap: 8px; min-width: 0; }
+    .found .seen { font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+    .found .controls { display: grid; gap: 8px; grid-template-columns: 2fr 1fr 1fr; }
+    .found .controls label { font-size: 0.8rem; color: var(--muted); display: grid; gap: 2px; }
+    @media (max-width: 560px) { .found .controls { grid-template-columns: 1fr 1fr; } .found .controls label:first-child { grid-column: 1 / -1; } }
+    .warn { font-size: 0.85rem; color: var(--badge-brand-text); background: var(--badge-brand-bg); padding: 2px 8px; border-radius: 6px; justify-self: start; }
+    .summary { font-weight: 600; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <header class="site wrap narrow">
+    <a class="logo" href="/">🛒 CartCompare</a>
+    <a href="/list.html">Build your list</a>
+  </header>
+
+  <main class="wrap narrow">
+    <h1>Update prices from a photo</h1>
+    <p class="muted">For the CartCompare team. Upload a receipt, shelf tag, weekly ad, or a screenshot of a store's app. Review what was found, then save it to the price sheet.</p>
+
+    <section class="card" aria-labelledby="h-pw">
+      <h2 id="h-pw">Password</h2>
+      <div class="field">
+        <label for="pw" class="sr-only">Admin password</label>
+        <input id="pw" type="password" autocomplete="current-password" placeholder="The ADMIN_PASSWORD you set in Vercel">
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-photo">
+      <h2 id="h-photo">1. Photo</h2>
+      <label class="drop" id="drop">
+        <input id="photo" type="file" accept="image/*" class="sr-only">
+        <strong>📷 Choose a photo or screenshot</strong>
+        <span class="muted">Flat, well-lit and in focus works best. Long receipts: take two photos.</span>
+        <img id="preview" alt="Preview of the photo" hidden>
+      </label>
+      <div class="actions">
+        <button class="btn" id="read-btn">Read prices</button>
+      </div>
+      <div id="read-msg" class="msg" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card" id="review" aria-labelledby="h-review" hidden>
+      <h2 id="h-review">2. Check what we found</h2>
+      <div class="row">
+        <div class="field">
+          <label for="store">Store</label>
+          <select id="store"></select>
+        </div>
+        <div class="field">
+          <label for="date">Date checked</label>
+          <input id="date" type="date">
+        </div>
+      </div>
+      <p class="muted">Untick anything that's wrong. "Not on the sheet" items are skipped unless you pick a row or "Add as a new row".</p>
+      <ul class="found" id="found"></ul>
+      <div class="summary" id="summary"></div>
+      <div class="actions">
+        <button class="btn" id="save-btn">Save to price sheet</button>
+        <button class="btn secondary" id="download-btn">Download updated sheet</button>
+      </div>
+      <div id="save-msg" class="msg" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">CartCompare · Price tools</div>
+  </footer>
+
+  <script type="module">
+    import { parseCSV, toCSV, rowKey, applyUpdates } from './sheet.js';
+
+    const $ = (id) => document.getElementById(id);
+    const show = (el, text, kind) => { el.textContent = text; el.className = 'msg ' + (kind || ''); };
+    const PW_KEY = 'cartcompare:admin-pw';
+
+    let sheet = null;      // { header, rows } from prices.csv
+    let chains = [];       // [{ id: priceColumn, name }]
+    let photo = null;      // { media_type, data }
+    let found = [];        // items from the reader, with page state
+
+    // Remember the password on this device for convenience.
+    try { $('pw').value = localStorage.getItem(PW_KEY) || ''; } catch (e) { /* ignore */ }
+    $('pw').addEventListener('change', () => { try { localStorage.setItem(PW_KEY, $('pw').value); } catch (e) { /* ignore */ } });
+
+    const today = () => {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    };
+
+    async function loadSheet() {
+      const [csv, stores] = await Promise.all([
+        fetch('prices.csv', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error('prices.csv'); return r.text(); }),
+        fetch('stores.json').then((r) => r.json()),
+      ]);
+      sheet = parseCSV(csv);
+      const seen = new Map();
+      for (const s of stores.stores) if (s.priceColumn && !seen.has(s.priceColumn)) seen.set(s.priceColumn, s.chain);
+      chains = [...seen].map(([id, name]) => ({ id, name }));
+      $('store').innerHTML = '';
+      $('store').append(new Option('Pick the store…', ''));
+      for (const c of chains) $('store').append(new Option(c.name, c.id));
+    }
+
+    // ---------- Photo ----------
+    // Receipts have small print, so keep more detail than the list page does.
+    function resize(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const scale = Math.min(1, 2400 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          let dataUrl = c.toDataURL('image/jpeg', 0.85);
+          if (dataUrl.length > 3_900_000) dataUrl = c.toDataURL('image/jpeg', 0.65);
+          resolve(dataUrl);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't open that image.")); };
+        img.src = url;
+      });
+    }
+    async function onFile(file) {
+      if (!file || !file.type.startsWith('image/')) return show($('read-msg'), 'Please choose an image.', 'err');
+      try {
+        const dataUrl = await resize(file);
+        photo = { media_type: 'image/jpeg', data: dataUrl.split(',')[1] };
+        $('preview').src = dataUrl;
+        $('preview').hidden = false;
+        show($('read-msg'), 'Photo ready. Tap "Read prices".', '');
+      } catch (err) { show($('read-msg'), err.message, 'err'); }
+    }
+    $('photo').addEventListener('change', (e) => onFile(e.target.files[0]));
+    const drop = $('drop');
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); onFile(e.dataTransfer.files[0]); });
+
+    // ---------- Read ----------
+    $('read-btn').addEventListener('click', async () => {
+      if (!$('pw').value) return show($('read-msg'), 'Enter the password first.', 'err');
+      if (!photo) return show($('read-msg'), 'Choose a photo first.', 'err');
+      const btn = $('read-btn');
+      btn.disabled = true;
+      show($('read-msg'), 'Reading prices… this can take 10–30 seconds.', '');
+      try {
+        if (!sheet) await loadSheet();
+        const res = await fetch('/api/read-prices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': $('pw').value },
+          body: JSON.stringify({
+            image: photo,
+            rows: sheet.rows.map((r) => ({ item: r.item, brand: r.brand, size: r.size })),
+            stores: chains,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Reading failed.');
+        found = (data.items || []).map((it) => ({ ...it, on: it.row != null, choice: it.row != null ? String(it.row) : '' }));
+        $('store').value = data.store || '';
+        $('date').value = data.date || today();
+        renderFound();
+        $('review').hidden = false;
+        show($('read-msg'), found.length ? 'Found ' + found.length + ' prices.' : 'No prices found. Try a clearer photo.', found.length ? 'ok' : 'err');
+        show($('save-msg'), '', '');
+        $('review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        show($('read-msg'), err.message === 'prices.csv' ? "Couldn't load prices.csv." : err.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ---------- Review ----------
+    const label = (r) => r.item + (r.brand ? ' — ' + r.brand : '') + (r.size ? ' (' + r.size + ')' : '');
+    const squash = (s) => String(s || '').toLowerCase().replace(/gallon/g, 'gal').replace(/[^a-z0-9.]/g, '');
+
+    function renderFound() {
+      const ul = $('found');
+      ul.innerHTML = '';
+      found.forEach((it) => {
+        const li = document.createElement('li');
+        li.className = it.on ? '' : 'off';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = it.on;
+        cb.setAttribute('aria-label', 'Use ' + it.name);
+        cb.addEventListener('change', () => { it.on = cb.checked; li.className = it.on ? '' : 'off'; summarize(); });
+
+        const body = document.createElement('div');
+        body.className = 'body';
+        const title = document.createElement('strong');
+        title.textContent = (it.brand ? it.brand + ' ' : '') + it.name + (it.size ? ' · ' + it.size : '') + (it.weight_priced ? ' · per lb' : '');
+        const seen = document.createElement('div');
+        seen.className = 'seen';
+        seen.textContent = it.text;
+
+        const controls = document.createElement('div');
+        controls.className = 'controls';
+        const rowLabel = document.createElement('label');
+        rowLabel.textContent = 'Sheet row';
+        const sel = document.createElement('select');
+        sel.append(new Option('— Not on the sheet (skip) —', ''), new Option('+ Add as a new row', 'new'));
+        sheet.rows.forEach((r, i) => sel.append(new Option(label(r), String(i))));
+        sel.value = it.choice;
+        rowLabel.appendChild(sel);
+
+        const priceLabel = document.createElement('label');
+        priceLabel.textContent = 'Regular $';
+        const price = Object.assign(document.createElement('input'), { type: 'number', step: '0.01', min: '0', value: it.price ?? '' });
+        price.addEventListener('input', () => { it.price = price.value === '' ? null : Number(price.value); summarize(); });
+        priceLabel.appendChild(price);
+
+        const memberLabel = document.createElement('label');
+        memberLabel.textContent = 'Card $';
+        const member = Object.assign(document.createElement('input'), { type: 'number', step: '0.01', min: '0', value: it.member_price ?? '' });
+        member.addEventListener('input', () => { it.member_price = member.value === '' ? null : Number(member.value); summarize(); });
+        memberLabel.appendChild(member);
+        controls.append(rowLabel, priceLabel, memberLabel);
+
+        const warn = document.createElement('div');
+        warn.className = 'warn';
+        const updateWarn = () => {
+          const r = it.choice !== '' && it.choice !== 'new' ? sheet.rows[Number(it.choice)] : null;
+          warn.hidden = !(r && it.size && r.size && squash(r.size) !== squash(it.size));
+          if (!warn.hidden) warn.textContent = 'Size differs: photo says ' + it.size + ', sheet says ' + r.size;
+        };
+        sel.addEventListener('change', () => {
+          it.choice = sel.value;
+          it.on = sel.value !== '';
+          cb.checked = it.on;
+          li.className = it.on ? '' : 'off';
+          updateWarn();
+          summarize();
+        });
+        updateWarn();
+
+        body.append(title, seen, controls, warn);
+        li.append(cb, body);
+        ul.appendChild(li);
+      });
+      summarize();
+    }
+
+    function buildUpdates() {
+      const store = $('store').value;
+      const checkedOn = $('date').value;
+      const hasMember = sheet.header.includes(store + '_member');
+      const updates = [];
+      for (const it of found) {
+        if (!it.on || it.choice === '') continue;
+        const target = it.choice === 'new'
+          ? { newRow: { item: it.name, brand: it.brand || '', size: it.weight_priced ? '1 lb' : it.size || '' } }
+          : { key: rowKey(sheet.rows[Number(it.choice)]) };
+        let regular = it.price > 0 ? it.price : null;
+        let card = it.member_price > 0 ? it.member_price : null;
+        if (!hasMember && card != null) { regular = regular != null ? Math.min(regular, card) : card; card = null; }
+        if (regular != null) updates.push({ ...target, column: store, price: regular, checkedOn });
+        if (card != null) updates.push({ ...target, column: store + '_member', price: card, checkedOn });
+      }
+      return updates;
+    }
+
+    function summarize() {
+      const n = $('store').value ? buildUpdates().length : 0;
+      $('summary').textContent = $('store').value ? n + ' price' + (n === 1 ? '' : 's') + ' ready to save.' : 'Pick the store to continue.';
+    }
+    $('store').addEventListener('change', summarize);
+
+    function check() {
+      if (!$('store').value) { show($('save-msg'), 'Pick the store first.', 'err'); return null; }
+      if (!$('date').value) { show($('save-msg'), 'Pick the date the prices were checked.', 'err'); return null; }
+      const updates = buildUpdates();
+      if (!updates.length) { show($('save-msg'), 'Nothing selected to save.', 'err'); return null; }
+      return updates;
+    }
+
+    // ---------- Save ----------
+    $('save-btn').addEventListener('click', async () => {
+      const updates = check();
+      if (!updates) return;
+      const btn = $('save-btn');
+      btn.disabled = true;
+      show($('save-msg'), 'Saving…', '');
+      try {
+        const store = chains.find((c) => c.id === $('store').value);
+        const res = await fetch('/api/save-prices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Password': $('pw').value },
+          body: JSON.stringify({ updates, source: (store ? store.name : '') + ' ' + $('date').value }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Saving failed.');
+        if (data.csv) sheet = parseCSV(data.csv);
+        found = [];
+        $('found').innerHTML = '';
+        $('summary').textContent = '';
+        show($('save-msg'), '✅ Saved ' + data.applied + ' prices. The site updates in about a minute. Next photo?', 'ok');
+        photo = null;
+        $('preview').hidden = true;
+        $('photo').value = '';
+        show($('read-msg'), '', '');
+      } catch (err) {
+        show($('save-msg'), err.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Works without GitHub set up: download the sheet and upload it yourself.
+    $('download-btn').addEventListener('click', () => {
+      const updates = check();
+      if (!updates) return;
+      const { sheet: next, applied } = applyUpdates(sheet, updates);
+      const blob = new Blob([toCSV(next)], { type: 'text/csv' });
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'prices.csv' });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      sheet = next;
+      show($('save-msg'), 'Downloaded prices.csv with ' + applied + ' new prices. Upload it to GitHub to update the site. You can keep adding photos; each download includes everything so far.', 'ok');
+    });
+
+    loadSheet().catch(() => show($('read-msg'), "Couldn't load the price sheet. Refresh to try again.", 'err'));
+  </script>
+</body>
+</html>
