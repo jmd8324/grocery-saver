@@ -1,4 +1,4 @@
-// POST /api/verify-login  { token }
+// POST /api/account?action=verify  { token }
 // Trades a one-time emailed token for a 30-day session cookie.
 // This is a POST from a button on pro.html, not a plain link click, so email
 // scanners that pre-open links can't use up the token.

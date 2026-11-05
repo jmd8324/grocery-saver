@@ -1,4 +1,4 @@
-// GET /api/me — who is signed in and whether they have Pro.
+// GET /api/account?action=me — who is signed in and whether they have Pro.
 
 import { currentEmail, getUser } from './_auth.js';
 import { PRO_STATUSES } from './_stripe.js';

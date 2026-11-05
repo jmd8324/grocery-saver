@@ -1,4 +1,4 @@
-// POST /api/logout — ends the session on this device.
+// POST /api/account?action=logout — ends the session on this device.
 
 import { endSession } from './_auth.js';
 

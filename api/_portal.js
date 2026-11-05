@@ -1,4 +1,4 @@
-// POST /api/portal — opens Stripe's Customer Portal, where subscribers cancel,
+// POST /api/account?action=portal — opens Stripe's Customer Portal, where subscribers cancel,
 // update their card or see invoices. Returns { url }.
 
 import { getUser, requireUser } from './_auth.js';

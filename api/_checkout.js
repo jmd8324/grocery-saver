@@ -1,4 +1,4 @@
-// POST /api/checkout — starts a Stripe-hosted Checkout for CartCompare Pro.
+// POST /api/account?action=checkout — starts a Stripe-hosted Checkout for CartCompare Pro.
 // Returns { url } for the browser to go to. Pro is switched on by the
 // webhook (api/stripe-webhook.js), not by coming back from this page.
 
