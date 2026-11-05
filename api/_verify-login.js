@@ -5,6 +5,7 @@
 
 import { redis, redisConfigured } from './_redis.js';
 import { readBody, sha256, startSession } from './_auth.js';
+import { moveVisitorReceipts } from './_receipts.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -26,6 +27,7 @@ export default async function handler(req, res) {
     }
     await redis(['DEL', key]);
     await startSession(res, email);
+    await moveVisitorReceipts(req, email).catch((err) => console.error('Moving receipts failed:', err.message));
     return res.status(200).json({ email });
   } catch (err) {
     console.error('Sign-in failed:', err);

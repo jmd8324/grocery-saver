@@ -27,7 +27,7 @@ export function readBody(req) {
   return req.body || {};
 }
 
-function readCookie(req, name) {
+export function readCookie(req, name) {
   if (req.cookies && req.cookies[name]) return req.cookies[name];
   for (const part of String(req.headers.cookie || '').split(';')) {
     const [k, ...v] = part.trim().split('=');
@@ -36,17 +36,35 @@ function readCookie(req, name) {
   return '';
 }
 
+// Adds a Set-Cookie header without replacing any already set.
+export function addCookie(res, cookie) {
+  const prev = res.getHeader('Set-Cookie');
+  res.setHeader('Set-Cookie', prev ? [].concat(prev, cookie) : cookie);
+}
+
 export async function startSession(res, email) {
   const id = newToken();
   await redis(['SET', `session:${sha256(id)}`, email, 'EX', SESSION_SECONDS]);
-  res.setHeader('Set-Cookie',
-    `${COOKIE}=${id}; Path=/; Max-Age=${SESSION_SECONDS}; HttpOnly; Secure; SameSite=Lax`);
+  addCookie(res, `${COOKIE}=${id}; Path=/; Max-Age=${SESSION_SECONDS}; HttpOnly; Secure; SameSite=Lax`);
+}
+
+// An anonymous ID for this browser, so shoppers without an account still get
+// credit for the receipts they share. Pass res to create one if missing.
+const VISITOR = 'cc_visitor';
+const VISITOR_SECONDS = 365 * 24 * 60 * 60;
+export function visitorId(req, res) {
+  let id = readCookie(req, VISITOR);
+  if (/^[A-Za-z0-9_-]{20,64}$/.test(id)) return id;
+  if (!res) return null;
+  id = newToken();
+  addCookie(res, `${VISITOR}=${id}; Path=/; Max-Age=${VISITOR_SECONDS}; HttpOnly; Secure; SameSite=Lax`);
+  return id;
 }
 
 export async function endSession(req, res) {
   const id = readCookie(req, COOKIE);
   if (id && redisConfigured) await redis(['DEL', `session:${sha256(id)}`]);
-  res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  addCookie(res, `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
 }
 
 // The signed-in user's email, or null.

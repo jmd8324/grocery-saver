@@ -128,19 +128,26 @@
 
     // Remember the password on this device for convenience.
     try { $('pw').value = localStorage.getItem(PW_KEY) || ''; } catch (e) { /* ignore */ }
-    $('pw').addEventListener('change', () => { try { localStorage.setItem(PW_KEY, $('pw').value); } catch (e) { /* ignore */ } });
+    $('pw').addEventListener('change', () => {
+      sheet = null; // reload the price sheet with the new password
+      try { localStorage.setItem(PW_KEY, $('pw').value); } catch (e) { /* ignore */ }
+    });
 
     const today = () => {
       const d = new Date();
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     };
 
+    // The price sheet isn't public, so it loads through /api/prices with the password.
     async function loadSheet() {
-      const [csv, stores] = await Promise.all([
-        fetch('prices.csv', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error('prices.csv'); return r.text(); }),
-        fetch('stores.json').then((r) => r.json()),
-      ]);
-      sheet = parseCSV(csv);
+      const r = await fetch('/api/prices', { cache: 'no-store', headers: { 'X-Admin-Password': $('pw').value } });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || typeof data.csv !== 'string') throw new Error(data.error || 'prices.csv');
+      sheet = parseCSV(data.csv);
+    }
+
+    async function loadStores() {
+      const stores = await fetch('stores.json').then((r) => r.json());
       const seen = new Map();
       for (const s of stores.stores) if (s.priceColumn && !seen.has(s.priceColumn)) seen.set(s.priceColumn, s.chain);
       chains = [...seen].map(([id, name]) => ({ id, name }));
@@ -457,8 +464,9 @@
       show($('save-msg'), 'Downloaded prices.csv with ' + applied + ' new prices. Upload it to GitHub to update the site. You can keep adding photos; each download includes everything so far.', 'ok');
     });
 
-    loadSheet().then(() => { if ($('pw').value) loadQueue(); })
-      .catch(() => show($('read-msg'), "Couldn't load the price sheet. Refresh to try again.", 'err'));
+    loadStores().then(() => { if ($('pw').value) loadQueue(); })
+      .catch(() => show($('read-msg'), "Couldn't load the store list. Refresh to try again.", 'err'));
+
   </script>
 </body>
 </html>

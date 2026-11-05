@@ -9,6 +9,16 @@
     "api/submit-receipt.js": {
       "maxDuration": 60,
       "includeFiles": "{prices.csv,stores.json}"
+    },
+    "api/prices.js": {
+      "includeFiles": "prices.csv"
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/prices.csv",
+      "destination": "/list.html",
+      "permanent": false
+    }
+  ]
 }
