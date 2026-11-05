@@ -5,6 +5,10 @@
     },
     "api/read-prices.js": {
       "maxDuration": 60
+    },
+    "api/submit-receipt.js": {
+      "maxDuration": 60,
+      "includeFiles": "{prices.csv,stores.json}"
     }
   }
 }

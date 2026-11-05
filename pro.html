@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CartCompare Pro</title>
+  <meta name="description" content="Sign in to CartCompare and upgrade to Pro for saved lists, price history and live price updates.">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; margin: 8px 0 8px; }
+    .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 32px; }
+    .plan { margin-bottom: 24px; }
+    .price { font-size: 2.25rem; font-weight: 700; margin: 4px 0 16px; }
+    .price span { font-size: 1rem; font-weight: 400; color: var(--muted); }
+    .features { list-style: none; padding: 0; margin: 0 0 20px; display: grid; gap: 10px; }
+    .features li::before { content: "✓"; color: var(--brand); font-weight: 700; margin-right: 8px; }
+    .soon { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+            background: var(--badge-brand-bg); color: var(--badge-brand-text); margin-left: 6px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row input { flex: 1; min-width: 200px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header class="site wrap narrow">
+    <a class="logo" href="/">🛒 CartCompare</a>
+    <a href="/list.html">Compare your cart</a>
+  </header>
+
+  <main class="wrap narrow">
+    <h1>CartCompare Pro</h1>
+    <p class="lead">Comparing your cart is free. Pro is for shoppers who want more.</p>
+
+    <section class="card plan" aria-labelledby="plan-name">
+      <h2 id="plan-name" style="margin:0">Pro</h2>
+      <p class="price">$14 <span>/ month · cancel anytime</span></p>
+      <ul class="features">
+        <li>Saved lists <span class="soon">Coming soon</span></li>
+        <li>Live price updates instead of daily <span class="soon">Coming soon</span></li>
+        <li>Price history <span class="soon">Coming soon</span></li>
+      </ul>
+
+      <!-- Finishing sign-in from the emailed link -->
+      <div id="finish" hidden>
+        <p>Almost there. Tap below to finish signing in on this device.</p>
+        <button class="btn" id="finish-btn" type="button">Finish signing in</button>
+      </div>
+
+      <!-- Signed out -->
+      <form id="signin" hidden novalidate>
+        <p style="margin-top:0">Sign in with your email to upgrade. No password needed: we'll email you a link.</p>
+        <div class="row">
+          <label for="email" class="sr-only">Email address</label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+          <input class="sr-only" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button class="btn" type="submit">Email me a link</button>
+        </div>
+      </form>
+
+      <!-- Signed in, not Pro -->
+      <div id="upgrade" hidden>
+        <p style="margin-top:0">Signed in as <strong class="who"></strong>.</p>
+        <button class="btn" id="upgrade-btn" type="button">Upgrade to Pro</button>
+        <p class="muted" style="font-size:0.9rem">You'll pay on Stripe's secure checkout page, then come right back.</p>
+      </div>
+
+      <!-- Signed in, Pro -->
+      <div id="active" hidden>
+        <p style="margin-top:0">🎉 You're on Pro, <strong class="who"></strong>.</p>
+        <p id="past-due" class="msg err" hidden>Your last payment didn't go through. Please update your card.</p>
+        <button class="btn secondary" id="manage-btn" type="button">Manage billing</button>
+      </div>
+
+      <div id="msg" class="msg" role="status" aria-live="polite"></div>
+      <p id="signout-row" hidden style="margin-bottom:0"><button class="btn secondary small" id="signout-btn" type="button">Sign out</button></p>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">© <span id="year"></span> CartCompare</div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    const $ = (id) => document.getElementById(id);
+    const msg = $('msg');
+    function show(text, kind) { msg.textContent = text; msg.className = 'msg ' + (kind || ''); }
+
+    async function post(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+      return data;
+    }
+
+    function render(me) {
+      for (const id of ['finish', 'signin', 'upgrade', 'active', 'signout-row']) $(id).hidden = true;
+      document.querySelectorAll('.who').forEach((el) => { el.textContent = me.email || ''; });
+      if (!me.signedIn) { $('signin').hidden = false; return; }
+      $('signout-row').hidden = false;
+      if (me.pro) {
+        $('active').hidden = false;
+        $('past-due').hidden = me.status !== 'past_due';
+      } else {
+        $('upgrade').hidden = false;
+      }
+    }
+
+    async function loadMe() {
+      const res = await fetch('/api/account?action=me', { cache: 'no-store' });
+      const me = await res.json().catch(() => ({ signedIn: false }));
+      render(me);
+      return me;
+    }
+
+    // Pro is switched on by Stripe's webhook, which can take a few seconds.
+    async function waitForPro() {
+      show('Payment received. Turning on Pro…');
+      for (let i = 0; i < 10; i++) {
+        const me = await loadMe();
+        if (me.pro) { show('Welcome to Pro! 🎉', 'ok'); return; }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      show("Your payment went through, but Pro isn't on yet. Refresh in a minute, or email us if it doesn't show.", 'err');
+    }
+
+    async function start() {
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token');
+      const checkout = params.get('checkout');
+      // Drop the token from the address bar so it isn't bookmarked or shared.
+      if (token || checkout) history.replaceState(null, '', '/pro.html');
+
+      if (token) {
+        render({ signedIn: false });
+        $('signin').hidden = true;
+        $('finish').hidden = false;
+        $('finish-btn').onclick = async () => {
+          $('finish-btn').disabled = true;
+          try {
+            await post('/api/account?action=verify', { token });
+            show("You're signed in.", 'ok');
+            await loadMe();
+          } catch (err) {
+            show(err.message, 'err');
+            render({ signedIn: false });
+          } finally {
+            $('finish-btn').disabled = false;
+          }
+        };
+        return;
+      }
+
+      if (checkout === 'success') return waitForPro();
+      await loadMe();
+      if (checkout === 'cancelled') show('No problem. You can upgrade whenever you like.');
+    }
+
+    $('signin').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const email = form.email.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        show('Please enter a valid email address.', 'err');
+        form.email.focus();
+        return;
+      }
+      const button = form.querySelector('button');
+      button.disabled = true;
+      show('Sending…');
+      try {
+        const data = await post('/api/account?action=login', { email, company: form.company.value });
+        show(data.message, 'ok');
+      } catch (err) {
+        show(err.message + ' Please try again.', 'err');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    async function go(button, url) {
+      button.disabled = true;
+      show('One moment…');
+      try {
+        const data = await post(url);
+        location.href = data.url;
+      } catch (err) {
+        show(err.message, 'err');
+        button.disabled = false;
+      }
+    }
+    $('upgrade-btn').onclick = () => go($('upgrade-btn'), '/api/account?action=checkout');
+    $('manage-btn').onclick = () => go($('manage-btn'), '/api/account?action=portal');
+
+    $('signout-btn').onclick = async () => {
+      await post('/api/account?action=logout').catch(() => {});
+      show('Signed out.');
+      render({ signedIn: false });
+    };
+
+    start();
+  </script>
+</body>
+</html>
