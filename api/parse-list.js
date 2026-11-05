@@ -6,7 +6,8 @@
 // Needs the ANTHROPIC_API_KEY environment variable in Vercel.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { overLimit } from './_redis.js';
+import { overLimit, redisConfigured } from './_redis.js';
+import { whoIs, accessStatus } from './_receipts.js';
 
 const client = new Anthropic();
 
@@ -64,6 +65,14 @@ export default async function handler(req, res) {
   }
 
   // Each request costs money, so cap how often one visitor can call this.
+  // The list builder opens after sharing receipts (see api/_receipts.js).
+  if (redisConfigured) {
+    const status = await accessStatus(await whoIs(req)).catch(() => null);
+    if (status && !status.open) {
+      return res.status(403).json({ error: 'Share 2 receipts to use the list builder.', status });
+    }
+  }
+
   if (await overLimit(req, 'parse-list', 30, 60 * 60)) {
     return res.status(429).json({ error: "You've read a lot of lists this hour. Please try again later." });
   }

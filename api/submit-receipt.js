@@ -9,6 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { redis, redisConfigured } from './_redis.js';
+import { whoIs, recordReceipt, accessStatus } from './_receipts.js';
 import { readPrices, imageProblem, loadSheetAndStores, ReaderError, safeParse } from './_reader.js';
 
 const KEEP_DAYS = 60;
@@ -49,8 +50,13 @@ export default async function handler(req, res) {
   const store = picked ? picked.id : result.store;
   const storeName = (stores.find((s) => s.id === store) || {}).name || null;
 
+  // Who gets credit for this receipt (also gives first-time visitors their cookie).
+  let who = null;
+  try { who = await whoIs(req, res); } catch (err) { console.error('submit-receipt who:', err.message); }
+
   if (!result.items.length) {
-    return res.status(200).json({ count: 0, store: storeName, items: [] });
+    const access = who ? await accessStatus(who).catch(() => null) : null;
+    return res.status(200).json({ count: 0, store: storeName, items: [], access });
   }
 
   const submission = {
@@ -70,7 +76,19 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "We read your receipt but couldn't save it. Please try again." });
   }
 
+  let counted = false, access = null;
+  if (who) {
+    try {
+      counted = await recordReceipt(who, body.image.data);
+      access = await accessStatus(who);
+    } catch (err) {
+      console.error('submit-receipt credit:', err.message);
+    }
+  }
+
   return res.status(200).json({
+    counted,
+    access,
     count: submission.items.length,
     store: storeName,
     items: submission.items.map(({ name, brand, price, member_price }) => ({ name, brand, price, member_price })),

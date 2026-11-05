@@ -87,6 +87,20 @@
     .lines .note { color: var(--muted); font-size: 0.85rem; }
     .lines .missing { color: var(--muted); font-style: italic; }
     .fine { font-size: 0.9rem; color: var(--muted); margin: 16px 0 0; }
+
+    /* Share-receipts gate */
+    .gate { text-align: center; padding: 36px 28px; margin-bottom: 24px; }
+    .gate .ico { width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 20px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
+    .gate .ico svg { width: 32px; height: 32px; }
+    .gate h2 { font-size: 1.5rem; margin: 0 0 8px; }
+    .gate > p { max-width: 30em; margin: 0 auto 20px; }
+    .dots { display: flex; justify-content: center; gap: 10px; margin: 0 0 8px; }
+    .dots span { width: 44px; height: 10px; border-radius: 999px; background: var(--border); }
+    .dots span.on { background: var(--brand); }
+    .gate .count { font-weight: 700; margin: 0 0 20px; }
+    .gate .fine { margin-top: 20px; }
+    .open-note { font-size: 0.95rem; background: var(--brand-soft); color: var(--brand-strong); border-radius: var(--radius-sm); padding: 10px 16px; margin: 0 0 24px; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
@@ -99,8 +113,24 @@
     <h1>Build your grocery list</h1>
     <p class="lead">Tell us what you need and which store cards you have. We're starting in <strong>State College, PA</strong>.</p>
 
+    <p id="gate-loading" class="muted">Checking your receipts…</p>
+
+    <!-- Shown until this shopper has shared enough receipts (see api/_receipts.js) -->
+    <section class="card gate" id="gate" hidden aria-labelledby="gate-title">
+      <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9.5 7h5M9.5 11h5M9.5 15h3"/></svg></div>
+      <h2 id="gate-title">Share 2 receipts to compare</h2>
+      <p class="muted" id="gate-why">Every receipt you share adds real prices for your neighbors. Share 2 and the list builder opens for this visit.</p>
+      <div class="dots" id="gate-dots" aria-hidden="true"><span></span><span></span></div>
+      <p class="count" id="gate-count">0 of 2 shared</p>
+      <a class="btn" href="/upload.html">Share a receipt →</a>
+      <p class="fine" id="gate-pro">With <a href="/pro.html">CartCompare Pro</a>, you share 2 receipts once and compare anytime after that.</p>
+      <div id="gate-msg" class="msg" role="status" aria-live="polite"></div>
+    </section>
+
+    <p class="open-note" id="open-note" hidden></p>
+
     <!-- Step 1: Location -->
-    <section class="step card" aria-labelledby="s1">
+    <section class="step card" hidden aria-labelledby="s1">
       <h2 id="s1"><span class="num">1</span>Where do you shop?</h2>
       <p class="muted">We're launching around State College first.</p>
       <div class="zip-row">
@@ -111,7 +141,7 @@
     </section>
 
     <!-- Step 2: The list -->
-    <section class="step card" aria-labelledby="s2">
+    <section class="step card" hidden aria-labelledby="s2">
       <h2 id="s2"><span class="num">2</span>Add your list</h2>
       <p class="muted">Type it out, or upload a photo of a paper list or a screenshot from your notes app.</p>
 
@@ -149,7 +179,7 @@
     </section>
 
     <!-- Step 3: Review items -->
-    <section class="step card" aria-labelledby="s3">
+    <section class="step card" hidden aria-labelledby="s3">
       <h2 id="s3"><span class="num">3</span>Check your items</h2>
       <p class="muted">Tap a badge to switch between "any brand" and "this brand only".</p>
       <ul class="items" id="items"></ul>
@@ -162,20 +192,20 @@
     </section>
 
     <!-- Step 4: Loyalty programs -->
-    <section class="step card" aria-labelledby="s4">
+    <section class="step card" hidden aria-labelledby="s4">
       <h2 id="s4"><span class="num">4</span>Your loyalty programs</h2>
       <p class="muted">Pick the cards and memberships you have so we can use member prices. Not sure? Leave it blank and we'll show regular prices.</p>
       <div class="checks" id="loyalty"></div>
     </section>
 
     <!-- Step 5: Stores -->
-    <section class="step card" aria-labelledby="s5">
+    <section class="step card" hidden aria-labelledby="s5">
       <h2 id="s5"><span class="num">5</span>Stores to compare</h2>
       <p class="muted">Uncheck any store you don't want to shop at.</p>
       <div class="checks" id="stores"></div>
     </section>
 
-    <div class="done">
+    <div class="done" hidden>
       <button class="btn" id="compare-btn">Compare prices</button>
       <div id="compare-msg" class="msg" role="status" aria-live="polite"></div>
     </div>
@@ -573,9 +603,8 @@
       show($('compare-msg'), 'Comparing prices…', '');
       try {
         if (!priceRows) {
-          const r = await fetch('prices.csv', { cache: 'no-cache' });
-          if (!r.ok) throw new Error('prices');
-          priceRows = CartCompare.parseCSV(await r.text());
+          const ok = await openBuilder();
+          if (!ok) { show($('compare-msg'), '', ''); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
         }
         const stores = storeData.stores.filter((s) => !state.excludedStores.includes(s.id));
         if (!stores.length) { show($('compare-msg'), 'Pick at least one store in step 5.', 'err'); return; }
@@ -589,7 +618,60 @@
       }
     });
 
+    // ---------- Share-receipts gate ----------
+    // Free: each visit needs 2 new receipts. Pro: 2 receipts once.
+    // POST /api/prices opens the builder (if allowed) and returns the prices.
+    function showGate(status) {
+      const needed = status.needed || 2, shared = status.shared || 0, left = Math.max(needed - shared, 0);
+      document.querySelectorAll('.step, .done').forEach((n) => { n.hidden = true; });
+      $('results').hidden = true;
+      $('open-note').hidden = true;
+      $('gate').hidden = false;
+      $('gate-dots').querySelectorAll('span').forEach((d, i) => d.classList.toggle('on', i < shared));
+      $('gate-count').textContent = shared + ' of ' + needed + ' shared';
+      $('gate-title').textContent = left === needed
+        ? 'Share ' + needed + ' receipts to compare'
+        : 'Share ' + left + ' more receipt' + (left === 1 ? '' : 's') + ' to compare';
+      if (status.plan === 'pro') {
+        $('gate-why').textContent = "You're on Pro. Share " + needed + ' receipts one time, and the list builder stays open for good.';
+        $('gate-pro').hidden = true;
+      } else {
+        $('gate-why').textContent = 'Every receipt you share adds real prices for your neighbors. Share ' + needed + ' new receipts and the list builder opens for this visit.';
+      }
+    }
+
+    function showBuilder(status) {
+      $('gate').hidden = true;
+      document.querySelectorAll('.step, .done').forEach((n) => { n.hidden = false; });
+      if (status.plan === 'free' && status.openFor) {
+        const mins = Math.max(1, Math.round(status.openFor / 60));
+        $('open-note').textContent = 'Thanks for sharing! Your list builder is open for the next ' + mins + ' minute' + (mins === 1 ? '' : 's') + '. Next visit, share 2 new receipts, or go Pro to share just once.';
+        $('open-note').hidden = false;
+      }
+    }
+
+    async function openBuilder() {
+      try {
+        const r = await fetch('/api/prices', { method: 'POST', cache: 'no-store' });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && typeof data.csv === 'string') {
+          priceRows = CartCompare.parseCSV(data.csv);
+          showBuilder(data.status || {});
+          return true;
+        }
+        if (r.status === 403 && data.status) { showGate(data.status); return false; }
+        throw new Error(data.error);
+      } catch (err) {
+        showGate({ needed: 2, shared: 0 });
+        show($('gate-msg'), (err && err.message) || "We couldn't check your receipts. Refresh to try again.", 'err');
+        return false;
+      } finally {
+        $('gate-loading').hidden = true;
+      }
+    }
+
     // ---------- Start ----------
+    openBuilder();
     load();
     $('zip').value = state.zip || '16801';
     renderItems();

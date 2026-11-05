@@ -97,6 +97,18 @@ Without `GITHUB_TOKEN`, use **Download updated sheet** and upload the file to Gi
 Each save is a normal commit to `main` named like "Update 24 prices (GIANT 2026-11-03)", so you can see
 or undo any change in the repo's history. Reading a photo uses the same `ANTHROPIC_API_KEY` as the list reader.
 
+## Share receipts to compare
+
+The list builder opens only after a shopper shares receipts (`api/_receipts.js`):
+
+- **Free:** each visit needs **2 new receipts**. That opens the builder for 1 hour.
+- **Pro:** **2 receipts once**, then the builder is always open.
+
+A receipt counts only if prices were found on it, and the same photo never counts twice.
+Shoppers without an account are tracked by an anonymous browser cookie; when they sign in,
+their receipts move to their account. Prices load through `/api/prices`, and the plain
+`/prices.csv` link is redirected (see `vercel.json`) so the rule can't be skipped.
+
 ## Turning on the waitlist (one-time setup)
 
 The form needs somewhere to store emails. We use **Upstash Redis** (free tier) through Vercel:
