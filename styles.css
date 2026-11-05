@@ -42,6 +42,7 @@ body {
 .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
 .wrap.narrow { max-width: 720px; }
 header.site { padding: 20px 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+header.site .links { display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
 .logo { font-weight: 700; font-size: 1.25rem; color: var(--brand); text-decoration: none; }
 a { color: var(--brand); }
 
