@@ -104,7 +104,8 @@ The form needs somewhere to store emails. We use **Upstash Redis** (free tier) t
 1. Open the project in the [Vercel dashboard](https://vercel.com/dashboard).
 2. Go to **Storage** → **Create Database** (or **Marketplace**) → pick **Upstash Redis** → choose the free plan.
 3. Connect it to the CartCompare project. Vercel adds the needed environment
-   variables (`KV_REST_API_URL` and `KV_REST_API_TOKEN`) for you.
+   variables for you — either `REDIS_URL`, or `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN`. The site works with both.
 4. **Redeploy** (Deployments → ⋯ → Redeploy) so the function picks up the new variables.
 5. Visit the site, sign up with your own email, and check you see "You're on the list!".
 
