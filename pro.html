@@ -111,7 +111,7 @@
     }
 
     async function loadMe() {
-      const res = await fetch('/api/me', { cache: 'no-store' });
+      const res = await fetch('/api/account?action=me', { cache: 'no-store' });
       const me = await res.json().catch(() => ({ signedIn: false }));
       render(me);
       return me;
@@ -142,7 +142,7 @@
         $('finish-btn').onclick = async () => {
           $('finish-btn').disabled = true;
           try {
-            await post('/api/verify-login', { token });
+            await post('/api/account?action=verify', { token });
             show("You're signed in.", 'ok');
             await loadMe();
           } catch (err) {
@@ -173,7 +173,7 @@
       button.disabled = true;
       show('Sending…');
       try {
-        const data = await post('/api/login', { email, company: form.company.value });
+        const data = await post('/api/account?action=login', { email, company: form.company.value });
         show(data.message, 'ok');
       } catch (err) {
         show(err.message + ' Please try again.', 'err');
@@ -193,11 +193,11 @@
         button.disabled = false;
       }
     }
-    $('upgrade-btn').onclick = () => go($('upgrade-btn'), '/api/checkout');
-    $('manage-btn').onclick = () => go($('manage-btn'), '/api/portal');
+    $('upgrade-btn').onclick = () => go($('upgrade-btn'), '/api/account?action=checkout');
+    $('manage-btn').onclick = () => go($('manage-btn'), '/api/account?action=portal');
 
     $('signout-btn').onclick = async () => {
-      await post('/api/logout').catch(() => {});
+      await post('/api/account?action=logout').catch(() => {});
       show('Signed out.');
       render({ signedIn: false });
     };

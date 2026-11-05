@@ -1,4 +1,4 @@
-// POST /api/login  { email }
+// POST /api/account?action=login  { email }
 // Emails a one-time sign-in link. Uses Resend (https://resend.com):
 //   RESEND_API_KEY  re_…
 //   EMAIL_FROM      e.g. "CartCompare <signin@yourdomain.com>"
