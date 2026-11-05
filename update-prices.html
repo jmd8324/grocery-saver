@@ -72,10 +72,11 @@
     <section class="card" aria-labelledby="h-photo">
       <h2 id="h-photo">Or upload your own photo</h2>
       <label class="drop" id="drop">
-        <input id="photo" type="file" accept="image/*" class="sr-only">
-        <strong>📷 Choose a photo or screenshot</strong>
-        <span class="muted">Flat, well-lit and in focus works best. Long receipts: take two photos.</span>
+        <input id="photo" type="file" accept="image/*,application/pdf,.pdf" class="sr-only">
+        <strong>📷 Choose a photo, screenshot or PDF</strong>
+        <span class="muted">Receipts, shelf tags, weekly flyers or sale ads. Flat, well-lit and in focus works best. PDFs up to 3 MB.</span>
         <img id="preview" alt="Preview of the photo" hidden>
+        <strong id="file-name" hidden></strong>
       </label>
       <div class="actions">
         <button class="btn" id="read-btn">Read prices</button>
@@ -177,15 +178,38 @@
         img.src = url;
       });
     }
+    // PDFs (like a store's weekly ad) are sent as they are; the server allows about 3 MB.
+    const MAX_PDF_BYTES = 2_900_000;
+    function readPdf(file) {
+      return new Promise((resolve, reject) => {
+        if (file.size > MAX_PDF_BYTES) return reject(new Error('That PDF is too large (3 MB max). Try screenshots of the pages instead.'));
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1]);
+        r.onerror = () => reject(new Error("Couldn't open that PDF."));
+        r.readAsDataURL(file);
+      });
+    }
+    const isPdf = (file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+
     async function onFile(file) {
-      if (!file || !file.type.startsWith('image/')) return show($('read-msg'), 'Please choose an image.', 'err');
+      if (!file) return;
       try {
+        if (isPdf(file)) {
+          photo = { media_type: 'application/pdf', data: await readPdf(file) };
+          $('preview').hidden = true;
+          $('file-name').textContent = '📄 ' + (file.name || 'PDF');
+          $('file-name').hidden = false;
+          show($('read-msg'), 'PDF ready. Tap "Read prices". A full weekly ad can take a minute or two.', '');
+          return;
+        }
+        if (!file.type.startsWith('image/')) return show($('read-msg'), 'Please choose an image or a PDF.', 'err');
         const dataUrl = await resize(file);
         photo = { media_type: 'image/jpeg', data: dataUrl.split(',')[1] };
+        $('file-name').hidden = true;
         $('preview').src = dataUrl;
         $('preview').hidden = false;
         show($('read-msg'), 'Photo ready. Tap "Read prices".', '');
-      } catch (err) { show($('read-msg'), err.message, 'err'); }
+      } catch (err) { photo = null; show($('read-msg'), err.message, 'err'); }
     }
     $('photo').addEventListener('change', (e) => onFile(e.target.files[0]));
     const drop = $('drop');
@@ -251,10 +275,12 @@
         const info = document.createElement('div');
         const chain = chains.find((c) => c.id === sub.store);
         const strong = document.createElement('strong');
-        strong.textContent = (chain ? chain.name : 'Unknown store') + ' · ' + sub.items.length + ' prices';
+        const isAd = sub.kind === 'weekly_ad';
+        strong.textContent = (chain ? chain.name : 'Unknown store') + ' · ' + (isAd ? 'Weekly ad · ' : '') + sub.items.length + ' prices';
         const small = document.createElement('div');
         small.className = 'muted';
-        small.textContent = (sub.date ? 'Receipt date ' + sub.date + ' · ' : '') + 'shared ' + new Date(sub.at).toLocaleString();
+        small.textContent = (sub.date ? (isAd ? 'Ad starts ' : 'Receipt date ') + sub.date + ' · ' : '') +
+          (sub.sale_ends ? 'sale ends ' + sub.sale_ends + ' · ' : '') + 'shared ' + new Date(sub.at).toLocaleString();
         info.append(strong, small);
         const btns = document.createElement('div');
         btns.className = 'btns';
@@ -268,7 +294,7 @@
               const i = it.rowKey ? sheet.rows.findIndex((r) => rowKey(r) === it.rowKey) : -1;
               return { ...it, row: i >= 0 ? i : null };
             }),
-          }, 'From a shopper receipt shared ' + new Date(sub.at).toLocaleString() + '.');
+          }, 'From a shopper ' + (sub.kind === 'weekly_ad' ? 'weekly ad' : 'receipt') + ' shared ' + new Date(sub.at).toLocaleString() + '.');
         });
         const discard = Object.assign(document.createElement('button'), { className: 'btn small secondary', textContent: 'Discard' });
         discard.addEventListener('click', () => finish(sub, 'discard'));
@@ -375,7 +401,13 @@
         });
         updateWarn();
 
-        body.append(title, seen, controls, warn);
+        // Sale and deal prices from flyers only last a while: flag them for review.
+        const sale = document.createElement('div');
+        sale.className = 'warn';
+        const saleBits = [it.deal ? 'Deal: ' + it.deal : '', it.sale_ends ? 'sale ends ' + it.sale_ends : ''].filter(Boolean);
+        sale.textContent = saleBits.join(' · ');
+        sale.hidden = !saleBits.length;
+        body.append(title, seen, controls, warn, sale);
         li.append(cb, body);
         ul.appendChild(li);
       });
@@ -439,6 +471,7 @@
         show($('save-msg'), '✅ Saved ' + data.applied + ' prices. The site updates in about a minute. Next photo?', 'ok');
         photo = null;
         $('preview').hidden = true;
+        $('file-name').hidden = true;
         $('photo').value = '';
         show($('read-msg'), '', '');
       } catch (err) {
