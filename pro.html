@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CartCompare Pro</title>
   <meta name="description" content="Sign in to CartCompare and upgrade to Pro for saved lists, price history and live price updates.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="styles.css">
   <style>
-    h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; margin: 8px 0 8px; }
-    .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 32px; }
     .plan { margin-bottom: 24px; }
     .price { font-size: 2.25rem; font-weight: 700; margin: 4px 0 16px; }
     .price span { font-size: 1rem; font-weight: 400; color: var(--muted); }
@@ -23,8 +24,8 @@
 </head>
 <body>
   <header class="site wrap narrow">
-    <a class="logo" href="/">🛒 CartCompare</a>
-    <a href="/list.html">Compare your cart</a>
+    <a class="logo" href="/"><span class="mark" aria-hidden="true"></span>CartCompare</a>
+    <nav class="links"><a href="/list.html">Compare your cart</a> <a href="/upload.html">Share a receipt</a></nav>
   </header>
 
   <main class="wrap narrow">

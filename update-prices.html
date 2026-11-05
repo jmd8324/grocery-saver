@@ -5,18 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <title>Update Prices — CartCompare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="styles.css">
   <style>
-    h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.2; margin: 8px 0; }
     section.card { margin-bottom: 20px; }
     .card h2 { font-size: 1.15rem; margin: 0 0 8px; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
     .field { display: grid; gap: 4px; flex: 1 1 180px; }
     .field label { font-size: 0.9rem; font-weight: 600; }
-    select, input[type="date"], input[type="password"], input[type="number"] {
-      width: 100%; padding: 10px 12px; font-size: 1rem; font-family: inherit;
-      border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
-    }
     .drop {
       display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
       border: 2px dashed var(--border); border-radius: 12px; padding: 24px 16px; cursor: pointer; background: var(--surface-2);
@@ -47,8 +45,8 @@
 </head>
 <body>
   <header class="site wrap narrow">
-    <a class="logo" href="/">🛒 CartCompare</a>
-    <a href="/list.html">Build your list</a>
+    <a class="logo" href="/"><span class="mark" aria-hidden="true"></span>CartCompare</a>
+    <nav class="links"><a href="/list.html">Build your list</a></nav>
   </header>
 
   <main class="wrap narrow">
