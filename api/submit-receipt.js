@@ -1,7 +1,7 @@
 // Vercel serverless function: POST /api/submit-receipt   (public, no account)
-// A shopper uploads a receipt photo. Claude reads the prices, and the result
+// A shopper uploads a receipt or weekly-flyer photo, or a PDF. Claude reads the prices, and the result
 // is queued for the owner to approve on /update-prices.html before anything
-// reaches the price sheet. The photo itself is never stored.
+// reaches the price sheet. The photo or PDF itself is never stored.
 //
 // Body: { image: { media_type, data }, store?: "giant" }
 // Needs ANTHROPIC_API_KEY and Upstash Redis (for the review queue).
@@ -65,8 +65,9 @@ export default async function handler(req, res) {
     store,
     date: result.date,
     kind: result.kind,
-    items: result.items.slice(0, 200).map(({ text, name, brand, size, price, member_price, weight_priced, rowKey }) =>
-      ({ text, name, brand, size, price, member_price, weight_priced, rowKey })),
+    sale_ends: result.sale_ends,
+    items: result.items.slice(0, 300).map(({ text, name, brand, size, price, member_price, weight_priced, deal, sale_ends, rowKey }) =>
+      ({ text, name, brand, size, price, member_price, weight_priced, deal, sale_ends, rowKey })),
   };
   try {
     await redis(['SET', 'submission:' + submission.id, JSON.stringify(submission), 'EX', KEEP_DAYS * 24 * 60 * 60]);
@@ -91,6 +92,6 @@ export default async function handler(req, res) {
     access,
     count: submission.items.length,
     store: storeName,
-    items: submission.items.map(({ name, brand, price, member_price }) => ({ name, brand, price, member_price })),
+    items: submission.items.map(({ name, brand, price, member_price, deal }) => ({ name, brand, price, member_price, deal })),
   });
 }

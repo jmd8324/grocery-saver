@@ -22,6 +22,7 @@
     .drop.over { border-color: var(--brand); }
     .drop .big { font-size: 2.5rem; }
     .drop img { max-width: 100%; max-height: 360px; border-radius: 8px; }
+    .file-name { font-weight: 700; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; }
     .field { display: grid; gap: 4px; margin-top: 16px; }
     .field label { font-weight: 600; font-size: 0.95rem; }
     .actions { margin-top: 16px; }
@@ -47,19 +48,20 @@
   </header>
 
   <main class="wrap narrow">
-    <h1>Share a grocery receipt</h1>
-    <p class="lead">Every receipt shows real State College prices, so neighbors can find the cheapest store for their list.</p>
+    <h1>Share a receipt or flyer</h1>
+    <p class="lead">Every receipt and weekly flyer shows real State College prices, so neighbors can find the cheapest store for their list.</p>
     <ul class="perks">
       <li>✅ Free</li><li>🙅 No account</li><li>⏱️ Takes 10 seconds</li><li>🔓 2 receipts open the list builder</li>
     </ul>
 
     <section class="card" id="form-card">
       <label class="drop" id="drop">
-        <input id="photo" type="file" accept="image/*" class="sr-only">
+        <input id="photo" type="file" accept="image/*,application/pdf,.pdf" class="sr-only">
         <span class="big">🧾</span>
-        <strong>Take or choose a photo of your receipt</strong>
-        <span class="muted">Lay it flat in good light. Long receipt? Fold it or share two photos.</span>
+        <strong>Take or choose a photo of your receipt or a weekly flyer</strong>
+        <span class="muted">Photos or PDFs both work. Lay receipts flat in good light. Long receipt? Fold it or share two photos.</span>
         <img id="preview" alt="Preview of your receipt" hidden>
+        <span id="file-name" class="file-name" hidden></span>
       </label>
 
       <div class="field">
@@ -81,7 +83,7 @@
       <ul class="tips">
         <li>Shelf price tags</li>
         <li>Screenshots of a store's app or website showing prices</li>
-        <li>Weekly ad flyers</li>
+        <li>Weekly ad flyers and sale ads: a photo, or the PDF from the store's website (up to 3 MB)</li>
       </ul>
     </section>
   </main>
@@ -127,16 +129,41 @@
       });
     }
 
+
+    // PDFs (like a store's weekly ad) are sent as they are; the server allows about 3 MB.
+    const MAX_PDF_BYTES = 2_900_000;
+    function readPdf(file) {
+      return new Promise((resolve, reject) => {
+        if (file.size > MAX_PDF_BYTES) {
+          return reject(new Error('That PDF is too large (3 MB max). Try screenshots of the flyer pages instead.'));
+        }
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1]);
+        r.onerror = () => reject(new Error("We couldn't open that PDF."));
+        r.readAsDataURL(file);
+      });
+    }
+    const isPdf = (file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+
     async function onFile(file) {
       if (!file) return;
-      if (!file.type.startsWith('image/')) return show('Please choose a photo.', 'err');
       try {
+        if (isPdf(file)) {
+          photo = { media_type: 'application/pdf', data: await readPdf(file) };
+          $('preview').hidden = true;
+          $('file-name').textContent = '📄 ' + (file.name || 'PDF');
+          $('file-name').hidden = false;
+          show('Got your PDF. Tap "Share receipt". Big flyers can take a minute or two to read.', '');
+          return;
+        }
+        if (!file.type.startsWith('image/')) return show('Please choose a photo or a PDF.', 'err');
         const dataUrl = await resize(file);
         photo = { media_type: 'image/jpeg', data: dataUrl.split(',')[1] };
+        $('file-name').hidden = true;
         $('preview').src = dataUrl;
         $('preview').hidden = false;
         show('Looks good. Tap "Share receipt".', '');
-      } catch (err) { show(err.message, 'err'); }
+      } catch (err) { photo = null; show(err.message, 'err'); }
     }
     $('photo').addEventListener('change', (e) => onFile(e.target.files[0]));
     const drop = $('drop');
@@ -161,7 +188,7 @@
         for (const it of data.items) {
           const li = document.createElement('li');
           const p = it.member_price && (!it.price || it.member_price < it.price) ? money(it.member_price) + ' with card' : money(it.price);
-          li.append(el('span', (it.brand ? it.brand + ' ' : '') + it.name), el('span', p));
+          li.append(el('span', (it.brand ? it.brand + ' ' : '') + it.name + (it.deal ? ' (' + it.deal + ')' : '')), el('span', p));
           ul.appendChild(li);
         }
         box.appendChild(ul);
@@ -196,10 +223,10 @@
     }
 
     $('send-btn').addEventListener('click', async () => {
-      if (!photo) return show('Choose a photo of your receipt first.', 'err');
+      if (!photo) return show('Choose a photo or PDF first.', 'err');
       const btn = $('send-btn');
       btn.disabled = true;
-      show('Reading your receipt… this takes about 10–30 seconds.', '');
+      show(photo.media_type === 'application/pdf' ? 'Reading your PDF… a full weekly ad can take a minute or two.' : 'Reading your receipt… this takes about 10–30 seconds.', '');
       try {
         const res = await fetch('/api/submit-receipt', {
           method: 'POST',
@@ -212,6 +239,7 @@
         photo = null;
         $('photo').value = '';
         $('preview').hidden = true;
+        $('file-name').hidden = true;
         thank(data);
       } catch (err) {
         show(err.message, 'err');
