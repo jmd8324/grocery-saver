@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Share a Receipt — CartCompare</title>
   <meta name="description" content="Snap your grocery receipt to help State College shoppers see real prices. Free, no account needed.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="styles.css">
   <style>
-    h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; margin: 8px 0 8px; }
-    .lead { font-size: 1.1rem; color: var(--muted); margin: 0 0 24px; }
     .perks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; padding: 0; list-style: none; }
     .perks li { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; }
     section.card { margin-bottom: 20px; }
@@ -23,10 +24,6 @@
     .drop img { max-width: 100%; max-height: 360px; border-radius: 8px; }
     .field { display: grid; gap: 4px; margin-top: 16px; }
     .field label { font-weight: 600; font-size: 0.95rem; }
-    select {
-      width: 100%; padding: 12px 14px; font-size: 1rem; font-family: inherit;
-      border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
-    }
     .actions { margin-top: 16px; }
     .actions .btn { width: 100%; }
     .privacy { font-size: 0.9rem; color: var(--muted); margin: 12px 0 0; }
@@ -41,7 +38,7 @@
 </head>
 <body>
   <header class="site wrap narrow">
-    <a class="logo" href="/">🛒 CartCompare</a>
+    <a class="logo" href="/"><span class="mark" aria-hidden="true"></span>CartCompare</a>
     <nav class="links"><a href="/list.html">Compare your cart</a> <a href="/pro.html">Pro</a></nav>
   </header>
 
