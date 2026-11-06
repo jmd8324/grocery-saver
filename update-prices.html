@@ -367,7 +367,7 @@
         const body = document.createElement('div');
         body.className = 'body';
         const title = document.createElement('strong');
-        title.textContent = (it.brand ? it.brand + ' ' : '') + it.name + (it.size ? ' · ' + it.size : '') + (it.weight_priced ? ' · per lb' : '');
+        title.textContent = (it.brand ? it.brand + ' ' : '') + it.name + (it.product ? ' (' + it.product + ')' : '') + (it.size ? ' · ' + it.size : '') + (it.weight_priced ? ' · per lb' : '');
         const seen = document.createElement('div');
         seen.className = 'seen';
         seen.textContent = it.text;
@@ -435,6 +435,8 @@
         const target = it.choice === 'new'
           ? { newRow: { item: it.name, brand: it.brand || '', size: it.weight_priced ? '1 lb' : it.size || '' } }
           : { key: rowKey(sheet.rows[Number(it.choice)]) };
+        // The product's own name ("magic eraser") and list word ("cleaner") become searchable names.
+        target.alsoCalled = [it.product, it.category].filter(Boolean);
         let regular = it.price > 0 ? it.price : null;
         let card = it.member_price > 0 ? it.member_price : null;
         if (!hasMember && card != null) { regular = regular != null ? Math.min(regular, card) : card; card = null; }

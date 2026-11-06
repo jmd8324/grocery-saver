@@ -44,6 +44,10 @@ A PDF can have many pages (a full weekly ad): read every page.
 For each product return:
 - text: the line as printed (receipt abbreviations kept, e.g. "GNT WHL MLK GAL").
 - name: the plain generic product, lowercase (e.g. "whole milk").
+- product: the product's own specific name as printed, lowercase, without the brand, if it has one
+  beyond the generic name (e.g. "magic eraser", "honey nut", "original recipe", "pink lady"), else null.
+- category: the one- or two-word name a shopper would write on a list for this, lowercase
+  (e.g. "cleaner", "cereal", "chicken", "salad dressing", "milk", "water"), else null if it is the same as name.
 - brand: the national brand if it is one (e.g. "Heinz", "Cheerios"), else null. Store brands
   (GIANT, Nature's Promise, Weis Quality, Wegmans, Good & Gather, Great Value, ALDI brands, Trader Joe's,
   Member's Mark, etc.) count as no brand: brand null.
@@ -96,6 +100,8 @@ const SCHEMA = {
         properties: {
           text: { type: 'string' },
           name: { type: 'string' },
+          product: { type: ['string', 'null'] },
+          category: { type: ['string', 'null'] },
           brand: { type: ['string', 'null'] },
           size: { type: ['string', 'null'] },
           price: { type: ['number', 'null'] },
@@ -105,7 +111,7 @@ const SCHEMA = {
           deal: { type: ['string', 'null'] },
           sale_ends: { type: ['string', 'null'] },
         },
-        required: ['text', 'name', 'brand', 'size', 'price', 'member_price', 'row', 'weight_priced', 'deal', 'sale_ends'],
+        required: ['text', 'name', 'product', 'category', 'brand', 'size', 'price', 'member_price', 'row', 'weight_priced', 'deal', 'sale_ends'],
         additionalProperties: false,
       },
     },
