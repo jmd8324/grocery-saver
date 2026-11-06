@@ -384,6 +384,7 @@
           brand: it.brand ? String(it.brand) : null,
           quantity: it.quantity ? String(it.quantity) : null,
           original: it.original ? String(it.original) : null,
+          matches: Array.isArray(it.matches) ? it.matches.map(String) : [],
           exactBrand: Boolean(it.brand),
         });
       }
