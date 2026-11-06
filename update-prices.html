@@ -74,7 +74,7 @@
       <label class="drop" id="drop">
         <input id="photo" type="file" accept="image/*,application/pdf,.pdf" class="sr-only">
         <strong>📷 Choose a photo, screenshot or PDF</strong>
-        <span class="muted">Receipts, shelf tags, weekly flyers or sale ads. Flat, well-lit and in focus works best. PDFs up to 3 MB.</span>
+        <span class="muted">Receipts, shelf tags, weekly flyers or sale ads. Flat, well-lit and in focus works best. PDFs up to 30 MB.</span>
         <img id="preview" alt="Preview of the photo" hidden>
         <strong id="file-name" hidden></strong>
       </label>
@@ -178,11 +178,12 @@
         img.src = url;
       });
     }
-    // PDFs (like a store's weekly ad) are sent as they are; the server allows about 3 MB.
+    // PDFs (like a store's weekly ad): up to ~3 MB are sent as they are; bigger
+    // ones (up to 30 MB) are uploaded first with bigpdf.js when you tap Read.
     const MAX_PDF_BYTES = 2_900_000;
+    const MAX_BIG_PDF_BYTES = 30 * 1024 * 1024;
     function readPdf(file) {
       return new Promise((resolve, reject) => {
-        if (file.size > MAX_PDF_BYTES) return reject(new Error('That PDF is too large (3 MB max). Try screenshots of the pages instead.'));
         const r = new FileReader();
         r.onload = () => resolve(String(r.result).split(',')[1]);
         r.onerror = () => reject(new Error("Couldn't open that PDF."));
@@ -195,7 +196,10 @@
       if (!file) return;
       try {
         if (isPdf(file)) {
-          photo = { media_type: 'application/pdf', data: await readPdf(file) };
+          if (file.size > MAX_BIG_PDF_BYTES) throw new Error('That PDF is too large (30 MB max). Try splitting it.');
+          photo = file.size > MAX_PDF_BYTES
+            ? { media_type: 'application/pdf', file }
+            : { media_type: 'application/pdf', data: await readPdf(file) };
           $('preview').hidden = true;
           $('file-name').textContent = '📄 ' + (file.name || 'PDF');
           $('file-name').hidden = false;
@@ -226,11 +230,17 @@
       show($('read-msg'), 'Reading prices… this can take 10–30 seconds.', '');
       try {
         if (!sheet) await loadSheet();
+        let image = photo;
+        if (photo.file) {
+          const { uploadBigPdf } = await import('/bigpdf.js');
+          image = await uploadBigPdf(photo.file, (pct) => show($('read-msg'), 'Uploading PDF… ' + pct + '%', ''));
+          show($('read-msg'), 'Reading prices… a full weekly ad can take a minute or two.', '');
+        }
         const res = await fetch('/api/read-prices', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Admin-Password': $('pw').value },
           body: JSON.stringify({
-            image: photo,
+            image,
             rows: sheet.rows.map((r) => ({ item: r.item, brand: r.brand, size: r.size })),
             stores: chains,
           }),
