@@ -51,7 +51,7 @@
     <h1>Share a receipt or flyer</h1>
     <p class="lead">Every receipt and weekly flyer shows real State College prices, so neighbors can find the cheapest store for their list.</p>
     <ul class="perks">
-      <li>✅ Free</li><li>🙅 No account</li><li>⏱️ Takes 10 seconds</li><li>🔓 2 receipts open the list builder</li>
+      <li>✅ Free</li><li>🙅 No account</li><li>⏱️ Takes 10 seconds</li><li>🤝 Helps your neighbors save</li>
     </ul>
 
     <section class="card" id="form-card">
@@ -193,29 +193,21 @@
         }
         box.appendChild(ul);
       }
-      // Progress toward opening the list builder (2 receipts; see api/_receipts.js).
+      // Comparing your cart is a Pro feature; sharing is free for everyone.
       const a = data.access;
-      let ready = false;
-      if (a) {
-        const needed = a.needed || 2, shared = Math.min(a.shared || 0, needed);
-        ready = a.open || shared >= needed;
-        const prog = el('div', null, 'progress');
-        const dots = el('div', null, 'dots');
-        for (let i = 0; i < needed; i++) dots.appendChild(el('span', null, i < shared || a.open ? 'on' : ''));
-        let text;
-        if (a.plan === 'pro' && a.open) text = "You're all set. As a Pro member you can compare your cart anytime.";
-        else if (ready) text = "That's " + needed + ' receipts! Your list builder is ready.';
-        else text = shared + ' of ' + needed + ' receipts shared. Share ' + (needed - shared) + ' more to compare your cart.';
-        if (data.count && data.counted === false) text = 'This photo was already counted. ' + text;
-        prog.append(dots, el('div', text));
-        box.appendChild(prog);
-      }
+      const pro = Boolean(a && a.open);
+      if (data.count && data.counted === false) box.appendChild(el('p', 'This photo was already shared. Thanks!', 'muted'));
+      const note = el('div', null, 'progress');
+      note.append(el('div', pro
+        ? "You're on Pro, so you can compare your cart anytime."
+        : 'Want to see which store is cheapest for your whole list? That\'s CartCompare Pro.'));
+      box.appendChild(note);
 
       const next = el('div', null, 'next');
-      const again = el('button', 'Share another receipt', ready ? 'btn secondary' : 'btn');
+      const again = el('button', 'Share another receipt', 'btn secondary');
       again.addEventListener('click', () => { box.hidden = true; $('form-card').hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); });
-      const go = Object.assign(el('a', 'Compare your cart →', ready ? 'btn' : 'btn secondary'), { href: '/list.html' });
-      if (ready) next.append(go, again); else next.append(again, go);
+      const go = Object.assign(el('a', pro ? 'Compare your cart →' : 'See Pro →', 'btn'), { href: pro ? '/list.html' : '/pro.html' });
+      next.append(go, again);
       box.appendChild(next);
       $('form-card').hidden = true;
       box.hidden = false;
