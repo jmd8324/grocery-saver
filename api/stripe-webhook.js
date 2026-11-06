@@ -13,6 +13,7 @@
 //   charge.refunded, charge.dispute.created, radar.early_fraud_warning.created
 
 import { redis, redisConfigured } from './_redis.js';
+import { db, dbConfigured } from './_db.js';
 import { PRO_STATUSES, stripe } from './_stripe.js';
 
 const SUBSCRIPTION_EVENTS = new Set([
@@ -43,8 +44,9 @@ async function rawBody(req) {
 }
 
 async function syncCustomer(customerId) {
-  const email = await redis(['GET', `customer:${customerId}`]);
-  if (!email) {
+  const sql = await db();
+  const found = await sql`SELECT id FROM users WHERE stripe_customer = ${customerId}`;
+  if (!found.length) {
     console.warn(`Webhook for unknown customer ${customerId}; ignoring.`);
     return;
   }
@@ -53,7 +55,7 @@ async function syncCustomer(customerId) {
     .map((s) => s.status)
     .sort((a, b) => rank(a) - rank(b))[0] || 'none';
 
-  await redis(['HSET', `user:${email}`, 'pro_status', best, 'pro_updated', String(Date.now())]);
+  await sql`UPDATE users SET pro_status = ${best}, pro_updated = NOW() WHERE stripe_customer = ${customerId}`;
   console.log(`Customer ${customerId}: status ${best} (Pro: ${PRO_STATUSES.has(best)})`);
 }
 
@@ -70,8 +72,8 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed.' });
   }
-  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET || !redisConfigured) {
-    console.error('Webhook is not configured: need STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and Redis.');
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET || !dbConfigured) {
+    console.error('Webhook is not configured: need STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and DATABASE_URL.');
     return res.status(503).json({ error: 'Not configured.' });
   }
 
@@ -102,10 +104,12 @@ export default async function handler(req, res) {
       // Keep a list the owner can check, and refresh Pro status in case the
       // subscription was cancelled because of it.
       const customerId = await customerForRiskEvent(obj);
-      await redis(['LPUSH', 'stripe:alerts', JSON.stringify({
-        type: event.type, id: obj.id, customer: customerId, at: new Date().toISOString(),
-      })]);
-      await redis(['LTRIM', 'stripe:alerts', 0, 199]);
+      if (redisConfigured) {
+        await redis(['LPUSH', 'stripe:alerts', JSON.stringify({
+          type: event.type, id: obj.id, customer: customerId, at: new Date().toISOString(),
+        })]);
+        await redis(['LTRIM', 'stripe:alerts', 0, 199]);
+      }
       console.error(`Stripe alert ${event.type} for customer ${customerId}: check the Dashboard.`);
       if (customerId) await syncCustomer(customerId);
     }

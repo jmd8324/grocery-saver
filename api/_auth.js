@@ -1,24 +1,19 @@
-// Email sign-in (no passwords) and the user records Pro status lives in.
+// Email + password accounts, stored in Neon (see _db.js).
 //
-// Redis keys:
-//   login:<sha256 of token>   → email          (15 minutes, one use)
-//   session:<sha256 of id>    → email          (30 days)
-//   user:<email>              → hash { stripe_customer, pro_status, pro_updated }
-//   customer:<cus_…>          → email          (lets webhooks find the user)
-//
-// Only hashes of tokens are stored, so a Redis leak can't be used to sign in.
+// Sessions: the browser keeps a random cookie; the database keeps only its
+// SHA-256 hash, so a database leak can't be used to sign in.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { redis, redisConfigured } from './_redis.js';
+import { db, dbConfigured } from './_db.js';
 import { PRO_STATUSES } from './_stripe.js';
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COOKIE = 'cc_session';
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
-export const LOGIN_SECONDS = 15 * 60;
 
 export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 export const newToken = () => randomBytes(32).toString('base64url');
+export const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 export function readBody(req) {
   if (typeof req.body === 'string') {
@@ -42,9 +37,12 @@ export function addCookie(res, cookie) {
   res.setHeader('Set-Cookie', prev ? [].concat(prev, cookie) : cookie);
 }
 
-export async function startSession(res, email) {
+export async function startSession(res, userId) {
+  const sql = await db();
   const id = newToken();
-  await redis(['SET', `session:${sha256(id)}`, email, 'EX', SESSION_SECONDS]);
+  await sql`INSERT INTO sessions (token_hash, user_id, expires_at)
+            VALUES (${sha256(id)}, ${userId}, NOW() + make_interval(secs => ${SESSION_SECONDS}))`;
+  await sql`UPDATE users SET last_login_at = NOW() WHERE id = ${userId}`;
   addCookie(res, `${COOKIE}=${id}; Path=/; Max-Age=${SESSION_SECONDS}; HttpOnly; Secure; SameSite=Lax`);
 }
 
@@ -63,48 +61,60 @@ export function visitorId(req, res) {
 
 export async function endSession(req, res) {
   const id = readCookie(req, COOKIE);
-  if (id && redisConfigured) await redis(['DEL', `session:${sha256(id)}`]);
+  if (id && dbConfigured) {
+    const sql = await db();
+    await sql`DELETE FROM sessions WHERE token_hash = ${sha256(id)}`;
+  }
   addCookie(res, `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
 }
 
-// The signed-in user's email, or null.
-export async function currentEmail(req) {
-  if (!redisConfigured) return null;
+// The signed-in user's row, or null.
+export async function currentUser(req) {
+  if (!dbConfigured) return null;
   const id = readCookie(req, COOKIE);
   if (!id) return null;
-  return (await redis(['GET', `session:${sha256(id)}`])) || null;
+  const sql = await db();
+  const rows = await sql`SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+                         WHERE s.token_hash = ${sha256(id)} AND s.expires_at > NOW()`;
+  return rows[0] || null;
+}
+
+export async function currentEmail(req) {
+  return (await currentUser(req))?.email || null;
 }
 
 export async function getUser(email) {
-  const flat = (await redis(['HGETALL', `user:${email}`])) || [];
-  const user = {};
-  for (let i = 0; i < flat.length; i += 2) user[flat[i]] = flat[i + 1];
-  return user;
+  if (!dbConfigured || !email) return null;
+  const sql = await db();
+  const rows = await sql`SELECT * FROM users WHERE email = ${normalizeEmail(email)}`;
+  return rows[0] || null;
 }
+
+// Paid subscribers, plus accounts given Pro for free (the demo account).
+export const isProUser = (user) => Boolean(user && (user.free_pro || PRO_STATUSES.has(user.pro_status)));
 
 // Sends 401 and returns null if nobody is signed in.
 export async function requireUser(req, res) {
-  if (!redisConfigured) {
-    res.status(503).json({ error: "Sign-in isn't set up yet." });
+  if (!dbConfigured) {
+    res.status(503).json({ error: "Accounts aren't set up yet." });
     return null;
   }
-  const email = await currentEmail(req);
-  if (!email) {
-    res.status(401).json({ error: 'Please sign in first.' });
+  const user = await currentUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Please log in first.' });
     return null;
   }
-  return email;
+  return user;
 }
 
-// For Pro-only endpoints (saved lists, price history…). Sends 402/401 and
-// returns null unless the signed-in user has an active Pro subscription.
+// For Pro-only endpoints. Sends 402/401 and returns null unless the
+// signed-in user has Pro.
 export async function requirePro(req, res) {
-  const email = await requireUser(req, res);
-  if (!email) return null;
-  const user = await getUser(email);
-  if (!PRO_STATUSES.has(user.pro_status)) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  if (!isProUser(user)) {
     res.status(402).json({ error: 'This is a CartCompare Pro feature.' });
     return null;
   }
-  return email;
+  return user;
 }

@@ -1,7 +1,7 @@
 // POST /api/account?action=portal — opens Stripe's Customer Portal, where subscribers cancel,
 // update their card or see invoices. Returns { url }.
 
-import { getUser, requireUser } from './_auth.js';
+import { requireUser } from './_auth.js';
 import { siteUrl, stripe, stripeConfigured } from './_stripe.js';
 
 export default async function handler(req, res) {
@@ -11,11 +11,11 @@ export default async function handler(req, res) {
   }
   if (!stripeConfigured) return res.status(503).json({ error: "Billing isn't set up yet." });
 
-  const email = await requireUser(req, res);
-  if (!email) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   try {
-    const { stripe_customer: customer } = await getUser(email);
+    const customer = user.stripe_customer;
     if (!customer) return res.status(404).json({ error: "You don't have a subscription yet." });
 
     const session = await stripe.billingPortal.sessions.create({
