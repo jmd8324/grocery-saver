@@ -52,6 +52,8 @@ var CartCompare = (function () {
   const splitList = (s) => String(s || '').split(';').map(norm).filter(Boolean);
   const words = (s) => s.split(' ');
   const containsAll = (big, small) => { const b = new Set(words(big)); return words(small).every((w) => b.has(w)); };
+  // "2 milk" ends with "milk"; "protein milk shake" does not.
+  const endsWithWords = (big, small) => big !== small && (' ' + big).endsWith(' ' + small);
 
   // ---------- Amounts ----------
   const UNIT = {
@@ -97,14 +99,28 @@ var CartCompare = (function () {
   // Finds the price-sheet rows that can stand in for one list item.
   // Brand items only match rows with that brand. Generic items match every
   // row with that name (generic or branded), and the cheapest one wins per store.
+  //
+  // item.matches (from the AI list reader) names every sheet product that
+  // fits, so "milk" can match both "milk" and "2% milk". Without it (lists
+  // typed before this existed), a general word also matches products that end
+  // in that word: "milk" -> "2% milk", "cereal" -> "cereal".
   function matchRows(item, rows) {
     const name = norm(item.name);
     const brand = item.exactBrand && item.brand ? norm(item.brand) : null;
     const pool = brand ? rows.filter((r) => r.brands.includes(brand)) : rows;
+
+    if (Array.isArray(item.matches) && item.matches.length) {
+      const wanted = new Set(item.matches.map(norm));
+      // Plus any row whose "also called" names are exactly what was typed.
+      const picked = pool.filter((r) => wanted.has(norm(r.item)) || (name && r.names.includes(name)));
+      if (picked.length) return picked;
+    }
     if (!name) return pool.length && brand ? pool : [];
 
     const exact = pool.filter((r) => r.names.includes(name));
-    if (exact.length) return exact;
+    // Kinds of the same thing: the row's name ends in the shopper's words.
+    const kinds = pool.filter((r) => !exact.includes(r) && r.names.some((n) => endsWithWords(n, name)));
+    if (exact.length || kinds.length) return exact.concat(kinds);
     // "Cheerios" typed on its own: the brand is the product.
     if (brand && name === brand) return pool;
     // "whole milk" with only "milk" on the sheet, or "eggs" vs "large eggs".
@@ -119,6 +135,17 @@ var CartCompare = (function () {
       }
     }
     return best;
+  }
+
+  // Backup matches while the sheet has few prices: any row whose name has all
+  // the typed words anywhere ("rice" -> "spanish rice sauce mix"). Used only
+  // at a store where no real match has a price, and marked as "similar".
+  function looseRows(item, rows) {
+    const name = norm(item.name);
+    if (!name) return [];
+    const brand = item.exactBrand && item.brand ? norm(item.brand) : null;
+    const pool = brand ? rows.filter((r) => r.brands.includes(brand)) : rows;
+    return pool.filter((r) => r.names.some((n) => containsAll(n, name)));
   }
 
   // ---------- Compare ----------
@@ -154,13 +181,20 @@ var CartCompare = (function () {
 
     for (const item of items) {
       const matches = matchRows(item, rows);
+      const loose = looseRows(item, rows).filter((r) => !matches.includes(r));
       let pricedSomewhere = false;
       for (const res of results) {
-        let best = null;
-        for (const row of matches) {
-          const p = priceAt(row, res.store);
-          if (p && (!best || p.cents < best.price.cents)) best = { row, price: p };
-        }
+        const cheapest = (list) => {
+          let best = null;
+          for (const row of list) {
+            const p = priceAt(row, res.store);
+            if (p && (!best || p.cents < best.price.cents)) best = { row, price: p };
+          }
+          return best;
+        };
+        let best = cheapest(matches);
+        let similar = false;
+        if (!best) { best = cheapest(loose); similar = Boolean(best); }
         if (!best) { res.missing.push(item); continue; }
         pricedSomewhere = true;
         const { mult, sizeDiffers } = multiplier(item.quantity, best.row.size);
@@ -168,7 +202,7 @@ var CartCompare = (function () {
         res.total += cents;
         res.found += 1;
         res.lines.push({ item, product: (best.row.brands.length ? best.row.raw.brand.split(';')[0].trim() + ' ' : '') + best.row.item,
-          size: best.row.size, unitCents: best.price.cents, mult, cents, member: best.price.member, sizeDiffers });
+          size: best.row.size, unitCents: best.price.cents, mult, cents, member: best.price.member, sizeDiffers, similar });
         if (best.row.raw.checked_on) dates.push(best.row.raw.checked_on);
       }
       if (!pricedSomewhere) unpriced.push(item);

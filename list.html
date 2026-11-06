@@ -96,6 +96,8 @@
     .gate > p { max-width: 30em; margin: 0 auto 20px; }
     .gate .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
     .gate .fine { margin-top: 20px; }
+    .beta-note { font-size: 0.95rem; background: var(--accent-soft); color: var(--accent-text); border-radius: var(--radius-sm); padding: 12px 16px; margin: 0 0 24px; }
+    .beta-note strong { display: block; margin-bottom: 2px; }
     .open-note { font-size: 0.95rem; background: var(--brand-soft); color: var(--brand-strong); border-radius: var(--radius-sm); padding: 10px 16px; margin: 0 0 24px; }
     [hidden] { display: none !important; }
   </style>
@@ -109,6 +111,11 @@
   <main class="wrap narrow">
     <h1>Build your grocery list</h1>
     <p class="lead">Tell us what you need and which store cards you have. We're starting in <strong>State College, PA</strong>.</p>
+
+    <div class="beta-note" role="note">
+      <strong>We're still testing</strong>
+      For now, items are matched to the closest general product we have prices for, so "milk" might come up as 2% milk or a similar item. Matches will get more specific over time as more people share receipts.
+    </div>
 
     <p id="gate-loading" class="muted">Checking your account…</p>
 
@@ -384,6 +391,7 @@
           brand: it.brand ? String(it.brand) : null,
           quantity: it.quantity ? String(it.quantity) : null,
           original: it.original ? String(it.original) : null,
+          matches: Array.isArray(it.matches) ? it.matches.map(String) : [],
           exactBrand: Boolean(it.brand),
         });
       }
@@ -521,6 +529,7 @@
         const li = document.createElement('li');
         const left = el('span', '', itemLabel(l.item) + (l.mult > 1 ? ' × ' + l.mult : ''));
         const notes = [l.product + (l.size ? ', ' + l.size : '')];
+        if (l.similar) notes.push('similar item');
         if (l.member) notes.push('member price');
         if (l.sizeDiffers) notes.push('check size');
         left.append(document.createElement('br'), el('span', 'note', notes.join(' · ')));
