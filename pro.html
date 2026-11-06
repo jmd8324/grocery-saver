@@ -75,6 +75,7 @@
         <p style="margin-top:0">🎉 You're on Pro, <strong class="who"></strong>.</p>
         <p id="past-due" class="msg err" hidden>Your last payment didn't go through. Please update your card.</p>
         <button class="btn secondary" id="manage-btn" type="button">Manage billing</button>
+        <p id="free-pro" class="muted" hidden>This account has Pro for free, so there's no billing to manage.</p>
       </div>
 
       <div id="msg" class="msg" role="status" aria-live="polite"></div>
@@ -111,6 +112,8 @@
       if (me.pro) {
         $('active').hidden = false;
         $('past-due').hidden = me.status !== 'past_due';
+        $('manage-btn').hidden = !me.hasBilling;
+        $('free-pro').hidden = me.hasBilling;
       } else {
         $('upgrade').hidden = false;
       }
