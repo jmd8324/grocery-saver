@@ -66,8 +66,8 @@ export default async function handler(req, res) {
     date: result.date,
     kind: result.kind,
     sale_ends: result.sale_ends,
-    items: result.items.slice(0, 300).map(({ text, name, brand, size, price, member_price, weight_priced, deal, sale_ends, rowKey }) =>
-      ({ text, name, brand, size, price, member_price, weight_priced, deal, sale_ends, rowKey })),
+    items: result.items.slice(0, 300).map(({ text, name, product, category, brand, size, price, member_price, weight_priced, deal, sale_ends, rowKey }) =>
+      ({ text, name, product, category, brand, size, price, member_price, weight_priced, deal, sale_ends, rowKey })),
   };
   try {
     await redis(['SET', 'submission:' + submission.id, JSON.stringify(submission), 'EX', KEEP_DAYS * 24 * 60 * 60]);

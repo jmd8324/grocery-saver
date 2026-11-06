@@ -147,7 +147,9 @@ var CartCompare = (function () {
     if (!name) return [];
     const brand = item.exactBrand && item.brand ? norm(item.brand) : null;
     const pool = brand ? rows.filter((r) => r.brands.includes(brand)) : rows;
-    return pool.filter((r) => r.names.some((n) => containsAll(n, name)));
+    const similar = pool.filter((r) => r.names.some((n) => containsAll(n, name)));
+    // A brand item we have no exact product for ("Mr. Clean magic eraser"): any product of that brand.
+    return similar.length || !brand ? similar : pool;
   }
 
   // ---------- Compare ----------

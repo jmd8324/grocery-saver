@@ -45,11 +45,24 @@ export function priceColumns(header) {
   return header.filter((h) => !fixed.has(h));
 }
 
-// updates: [{ key, newRow?: { item, brand, size }, column, price, checkedOn }]
+// updates: [{ key, newRow?: { item, brand, size }, alsoCalled?, column, price, checkedOn }]
 //   key     - rowKey of an existing row, or omitted with newRow to add a row
+//   alsoCalled - other names to add to the row's also_called (e.g. "magic eraser; cleaner")
 //   column  - e.g. "giant" or "giant_member"
 //   price   - number like 3.99
 // Returns { sheet, applied, skipped } and never modifies the input sheet.
+// Adds names to a "a; b" list, skipping blanks, repeats and the item's own name.
+export function mergeNames(existing, extra, item) {
+  const out = String(existing || '').split(';').map((s) => s.trim()).filter(Boolean);
+  const seen = new Set([...out.map((s) => s.toLowerCase()), String(item || '').trim().toLowerCase()]);
+  const add = Array.isArray(extra) ? extra : String(extra || '').split(';');
+  for (const raw of add) {
+    const n = String(raw || '').replace(/[,;\r\n]+/g, ' ').trim().toLowerCase().slice(0, 60);
+    if (n && !seen.has(n)) { out.push(n); seen.add(n); }
+  }
+  return out.join('; ');
+}
+
 export function applyUpdates(sheet, updates) {
   const header = [...sheet.header];
   const rows = sheet.rows.map((r) => ({ ...r }));
@@ -72,6 +85,7 @@ export function applyUpdates(sheet, updates) {
       if (!row) { rows.push(candidate); byKey.set(k, candidate); row = candidate; }
     }
     if (!row) { skipped.push(u); continue; }
+    if (header.includes('also_called')) row.also_called = mergeNames(row.also_called, u.alsoCalled, row.item);
     row[u.column] = price.toFixed(2);
     const d = /^\d{4}-\d{2}-\d{2}$/.test(String(u.checkedOn || '')) ? u.checkedOn : null;
     if (d && (!row.checked_on || d > row.checked_on)) row.checked_on = d;
