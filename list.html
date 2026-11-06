@@ -522,6 +522,7 @@
         const li = document.createElement('li');
         const left = el('span', '', itemLabel(l.item) + (l.mult > 1 ? ' × ' + l.mult : ''));
         const notes = [l.product + (l.size ? ', ' + l.size : '')];
+        if (l.similar) notes.push('similar item');
         if (l.member) notes.push('member price');
         if (l.sizeDiffers) notes.push('check size');
         left.append(document.createElement('br'), el('span', 'note', notes.join(' · ')));

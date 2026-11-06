@@ -111,7 +111,8 @@ var CartCompare = (function () {
 
     if (Array.isArray(item.matches) && item.matches.length) {
       const wanted = new Set(item.matches.map(norm));
-      const picked = pool.filter((r) => wanted.has(norm(r.item)));
+      // Plus any row whose "also called" names are exactly what was typed.
+      const picked = pool.filter((r) => wanted.has(norm(r.item)) || (name && r.names.includes(name)));
       if (picked.length) return picked;
     }
     if (!name) return pool.length && brand ? pool : [];
@@ -134,6 +135,17 @@ var CartCompare = (function () {
       }
     }
     return best;
+  }
+
+  // Backup matches while the sheet has few prices: any row whose name has all
+  // the typed words anywhere ("rice" -> "spanish rice sauce mix"). Used only
+  // at a store where no real match has a price, and marked as "similar".
+  function looseRows(item, rows) {
+    const name = norm(item.name);
+    if (!name) return [];
+    const brand = item.exactBrand && item.brand ? norm(item.brand) : null;
+    const pool = brand ? rows.filter((r) => r.brands.includes(brand)) : rows;
+    return pool.filter((r) => r.names.some((n) => containsAll(n, name)));
   }
 
   // ---------- Compare ----------
@@ -169,13 +181,20 @@ var CartCompare = (function () {
 
     for (const item of items) {
       const matches = matchRows(item, rows);
+      const loose = looseRows(item, rows).filter((r) => !matches.includes(r));
       let pricedSomewhere = false;
       for (const res of results) {
-        let best = null;
-        for (const row of matches) {
-          const p = priceAt(row, res.store);
-          if (p && (!best || p.cents < best.price.cents)) best = { row, price: p };
-        }
+        const cheapest = (list) => {
+          let best = null;
+          for (const row of list) {
+            const p = priceAt(row, res.store);
+            if (p && (!best || p.cents < best.price.cents)) best = { row, price: p };
+          }
+          return best;
+        };
+        let best = cheapest(matches);
+        let similar = false;
+        if (!best) { best = cheapest(loose); similar = Boolean(best); }
         if (!best) { res.missing.push(item); continue; }
         pricedSomewhere = true;
         const { mult, sizeDiffers } = multiplier(item.quantity, best.row.size);
@@ -183,7 +202,7 @@ var CartCompare = (function () {
         res.total += cents;
         res.found += 1;
         res.lines.push({ item, product: (best.row.brands.length ? best.row.raw.brand.split(';')[0].trim() + ' ' : '') + best.row.item,
-          size: best.row.size, unitCents: best.price.cents, mult, cents, member: best.price.member, sizeDiffers });
+          size: best.row.size, unitCents: best.price.cents, mult, cents, member: best.price.member, sizeDiffers, similar });
         if (best.row.raw.checked_on) dates.push(best.row.raw.checked_on);
       }
       if (!pricedSomewhere) unpriced.push(item);
