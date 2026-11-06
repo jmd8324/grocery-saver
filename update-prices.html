@@ -97,7 +97,7 @@
           <input id="date" type="date">
         </div>
       </div>
-      <p class="muted">Untick anything that's wrong. "Not on the sheet" items are skipped unless you pick a row or "Add as a new row".</p>
+      <p class="muted">Untick anything that's wrong. Items that don't match a sheet row are added as new rows unless you pick a row or "Not on the sheet (skip)".</p>
       <ul class="found" id="found"></ul>
       <div class="summary" id="summary"></div>
       <div class="actions">
@@ -325,7 +325,8 @@
     $('discard-btn').addEventListener('click', () => { if (current) finish(current, 'discard'); });
 
     function startReview(data, from) {
-      found = (data.items || []).map((it) => ({ ...it, on: it.row != null, choice: it.row != null ? String(it.row) : '' }));
+      // Items that match no sheet row default to "Add as a new row".
+      found = (data.items || []).map((it) => ({ ...it, on: true, choice: it.row != null ? String(it.row) : 'new' }));
       $('store').value = data.store || '';
       $('date').value = data.date || today();
       $('from').textContent = from;
