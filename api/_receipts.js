@@ -1,24 +1,19 @@
-// "Share receipts to compare" rule.
+// Who is using the site, whether they can compare their cart (Pro only),
+// and a count of the receipts each shopper has shared.
 //
-//   Free: every visit to the list builder needs RECEIPTS_NEEDED new receipts.
-//         Unlocking uses them up and opens the builder for UNLOCK_SECONDS.
-//   Pro:  RECEIPTS_NEEDED receipts once (ever), then the builder is always open.
-//
-// A receipt counts only if we found prices on it, and the same photo never
-// counts twice for the same shopper. Shoppers are identified by their email
-// when signed in, otherwise by an anonymous browser cookie (cc_visitor).
+// Anyone can share receipts, signed in or not. A receipt counts only if we
+// found prices on it, and the same photo never counts twice for the same
+// shopper. Shoppers are identified by their email when signed in, otherwise
+// by an anonymous browser cookie (cc_visitor).
 //
 // Redis keys (<who> is "u:<email>" or "v:<visitor id>"):
-//   rc:credits:<who>       receipts shared and not yet used for a free visit
+//   rc:credits:<who>       receipts shared (kept from the old receipt rule)
 //   rc:total:<who>         receipts shared, ever
 //   rc:seen:<who>:<hash>   this photo already counted (60 days)
-//   rc:unlock:<who>        list builder is open (expires after UNLOCK_SECONDS)
 
 import { redis } from './_redis.js';
 import { currentUser, isProUser, sha256, visitorId } from './_auth.js';
 
-export const RECEIPTS_NEEDED = 2;
-export const UNLOCK_SECONDS = 60 * 60;
 const SEEN_SECONDS = 60 * 24 * 60 * 60;
 
 // Pass res to give a first-time visitor their cookie.
@@ -43,39 +38,15 @@ export async function recordReceipt(who, imageData) {
   return true;
 }
 
-// Where this shopper stands, for showing progress on the pages.
+// Where this shopper stands. Comparing your cart is a Pro feature
+// (paid subscribers and the demo account). Anyone can still share receipts.
 export async function accessStatus(who) {
-  if (!who) return { plan: 'free', needed: RECEIPTS_NEEDED, shared: 0, open: false };
-  // The demo account (for graders) gets everything with no receipts needed.
-  if (who.demo) return { plan: 'pro', needed: RECEIPTS_NEEDED, shared: RECEIPTS_NEEDED, open: true, openFor: null };
   const pro = isPro(who);
-  const [credits, total, ttl] = await Promise.all([
-    redis(['GET', `rc:credits:${who.key}`]),
-    redis(['GET', `rc:total:${who.key}`]),
-    redis(['TTL', `rc:unlock:${who.key}`]),
-  ]);
-  const shared = pro ? Math.min(toInt(total), RECEIPTS_NEEDED) : Math.min(toInt(credits), RECEIPTS_NEEDED);
-  const openFor = toInt(ttl) > 0 ? toInt(ttl) : 0;
-  const open = pro ? toInt(total) >= RECEIPTS_NEEDED : openFor > 0;
-  return { plan: pro ? 'pro' : 'free', needed: RECEIPTS_NEEDED, shared, open, openFor: pro ? null : openFor };
+  return { plan: pro ? 'pro' : 'free', signedIn: Boolean(who && who.email), open: pro };
 }
 
-// Opens the list builder if allowed, using up receipts for a free visit.
-// Returns the updated status; status.open tells whether it worked.
-export async function unlock(who) {
-  const status = await accessStatus(who);
-  if (status.open || status.plan === 'pro' || !who) return status;
-  if (status.shared < RECEIPTS_NEEDED) return status;
-
-  const left = await redis(['DECRBY', `rc:credits:${who.key}`, RECEIPTS_NEEDED]);
-  if (toInt(left) < 0) {
-    // Another tab spent them first: put them back.
-    await redis(['INCRBY', `rc:credits:${who.key}`, RECEIPTS_NEEDED]);
-    return status;
-  }
-  await redis(['SET', `rc:unlock:${who.key}`, '1', 'EX', UNLOCK_SECONDS]);
-  return { ...status, shared: Math.min(toInt(left), RECEIPTS_NEEDED), open: true, openFor: UNLOCK_SECONDS };
-}
+// Kept so callers don't change: opening the builder needs Pro, nothing else.
+export const unlock = accessStatus;
 
 // When someone signs in, receipts they shared on this browser move to their account.
 export async function moveVisitorReceipts(req, email) {
