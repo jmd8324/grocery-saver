@@ -2,6 +2,7 @@
 // api/submit-receipt.js (public uploads). Files starting with "_" are not endpoints.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { del } from '@vercel/blob';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseCSV, rowKey } from '../sheet.js';
@@ -12,6 +13,28 @@ export const MAX_IMAGE_B64 = 4_000_000;
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 export const PDF_TYPE = 'application/pdf';
 export const FILE_TYPES = [...IMAGE_TYPES, PDF_TYPE];
+// Big PDFs are uploaded to Vercel Blob first (api/blob-upload.js) and sent here as { url }.
+export const MAX_PDF_BYTES = 30 * 1024 * 1024;
+
+// A URL in THIS project's Blob store (the store id is part of the token and the hostname).
+function isOurBlob(url) {
+  try {
+    const u = new URL(url);
+    const storeId = String(process.env.BLOB_READ_WRITE_TOKEN || '').split('_')[3];
+    return u.protocol === 'https:' && Boolean(storeId)
+      && u.hostname === `${storeId.toLowerCase()}.public.blob.vercel-storage.com`
+      && u.pathname.startsWith('/uploads/');
+  } catch {
+    return false;
+  }
+}
+
+// Deletes an uploaded PDF once it has been read (or failed to read).
+export async function discardUpload(image) {
+  if (image && image.url && isOurBlob(image.url)) {
+    await del(image.url).catch((err) => console.error('Could not delete upload:', err.message));
+  }
+}
 
 const SYSTEM = `You read grocery prices for CartCompare, a price-comparison site for State College, PA.
 You get a photo or PDF of a receipt, shelf price tag, weekly flyer / sale ad, or a screenshot of a store's
@@ -94,11 +117,14 @@ const SCHEMA = {
 
 // Checks an uploaded photo or PDF. Returns an error message, or null if it's fine.
 export function imageProblem(image) {
-  const { media_type: mediaType, data } = image || {};
+  const { media_type: mediaType, data, url } = image || {};
+  if (url !== undefined) {
+    return mediaType === PDF_TYPE && typeof url === 'string' && isOurBlob(url) ? null : "We couldn't find that uploaded PDF. Please try again.";
+  }
   if (!FILE_TYPES.includes(mediaType) || typeof data !== 'string' || !data) return 'Please upload a photo (JPG, PNG, WebP or GIF) or a PDF.';
   if (data.length > MAX_IMAGE_B64) {
     return mediaType === PDF_TYPE
-      ? 'That PDF is too large (3 MB max). Try screenshots of the flyer pages instead.'
+      ? 'That PDF is too large to send directly. Please try again.'
       : 'That image is too large. Try a smaller photo or crop it.';
   }
   if (mediaType === PDF_TYPE && !data.startsWith('JVBER')) return "That file doesn't look like a PDF.";
@@ -127,7 +153,9 @@ export async function readPrices(image, rows, stores) {
   const sheetText = rows.map((r, i) => `${i}. ${clean(r.item)}${r.brand ? ' | brand: ' + clean(r.brand) : ''}${r.size ? ' | size: ' + clean(r.size) : ''}`).join('\n');
   const storeText = stores.map((s) => `${clean(s.id)}: ${clean(s.name)}`).join('\n');
 
-  const file = image.media_type === PDF_TYPE
+  const file = image.url
+    ? { type: 'document', source: { type: 'url', url: image.url } }
+    : image.media_type === PDF_TYPE
     ? { type: 'document', source: { type: 'base64', media_type: PDF_TYPE, data: image.data } }
     : { type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } };
 
@@ -150,6 +178,7 @@ export async function readPrices(image, rows, stores) {
       }],
     }).finalMessage();
   } catch (error) {
+    await discardUpload(image);
     if (error instanceof Anthropic.BadRequestError) {
       console.error('reader bad request:', error.message);
       throw new ReaderError(400, "We couldn't read that file. Try a different photo, or screenshots instead of a PDF.");
@@ -166,6 +195,7 @@ export async function readPrices(image, rows, stores) {
     throw new ReaderError(500, 'Something went wrong reading that photo.');
   }
 
+  await discardUpload(image);
   if (response.stop_reason === 'refusal') throw new ReaderError(422, "We couldn't read that photo.");
   if (response.stop_reason === 'max_tokens') throw new ReaderError(413, 'Too many items at once. Try a few pages or half the photo at a time.');
 

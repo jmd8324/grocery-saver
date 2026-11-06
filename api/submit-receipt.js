@@ -80,7 +80,7 @@ export default async function handler(req, res) {
   let counted = false, access = null;
   if (who) {
     try {
-      counted = await recordReceipt(who, body.image.data);
+      counted = await recordReceipt(who, body.image.data || body.image.url);
       access = await accessStatus(who);
     } catch (err) {
       console.error('submit-receipt credit:', err.message);
