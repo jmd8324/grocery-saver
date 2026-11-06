@@ -119,8 +119,10 @@ var CartCompare = (function () {
 
     const exact = pool.filter((r) => r.names.includes(name));
     // Kinds of the same thing: the row's name ends in the shopper's words.
-    const kinds = pool.filter((r) => !exact.includes(r) && r.names.some((n) => endsWithWords(n, name)));
-    if (exact.length || kinds.length) return exact.concat(kinds);
+    if (exact.length) return exact;
+    // Nothing named that: products that end in the shopper's words ("milk" -> "2% milk").
+    const kinds = pool.filter((r) => r.names.some((n) => endsWithWords(n, name)));
+    if (kinds.length) return kinds;
     // "Cheerios" typed on its own: the brand is the product.
     if (brand && name === brand) return pool;
     // "whole milk" with only "milk" on the sheet, or "eggs" vs "large eggs".
