@@ -2,9 +2,9 @@
 // Returns { url } for the browser to go to. Pro is switched on by the
 // webhook (api/stripe-webhook.js), not by coming back from this page.
 
-import { redis } from './_redis.js';
-import { getUser, requireUser } from './_auth.js';
-import { PRO_STATUSES, siteUrl, stripe, stripeConfigured } from './_stripe.js';
+import { db } from './_db.js';
+import { isProUser, requireUser } from './_auth.js';
+import { siteUrl, stripe, stripeConfigured } from './_stripe.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,22 +16,21 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "Upgrading isn't set up yet." });
   }
 
-  const email = await requireUser(req, res);
-  if (!email) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   try {
-    const user = await getUser(email);
-    if (PRO_STATUSES.has(user.pro_status)) {
+    if (isProUser(user)) {
       return res.status(409).json({ error: "You're already on Pro." });
     }
 
     // One Stripe Customer per CartCompare user, created on first upgrade.
     let customer = user.stripe_customer;
     if (!customer) {
-      const created = await stripe.customers.create({ email });
+      const created = await stripe.customers.create({ email: user.email, metadata: { user_id: String(user.id) } });
       customer = created.id;
-      await redis(['HSET', `user:${email}`, 'stripe_customer', customer]);
-      await redis(['SET', `customer:${customer}`, email]);
+      const sql = await db();
+      await sql`UPDATE users SET stripe_customer = ${customer} WHERE id = ${user.id}`;
     }
 
     const base = siteUrl(req);

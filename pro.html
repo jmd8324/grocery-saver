@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CartCompare Pro</title>
-  <meta name="description" content="Sign in to CartCompare and upgrade to Pro for saved lists, price history and live price updates.">
+  <meta name="description" content="Log in to CartCompare and upgrade to Pro for saved lists, price history and live price updates.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
@@ -19,6 +19,8 @@
             background: var(--badge-brand-bg); color: var(--badge-brand-text); margin-left: 6px; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .row input { flex: 1; min-width: 200px; }
+    .field { display: grid; gap: 4px; margin-bottom: 14px; }
+    .field label { font-size: 0.9rem; font-weight: 600; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -42,20 +44,22 @@
         <li>Price history <span class="soon">Coming soon</span></li>
       </ul>
 
-      <!-- Finishing sign-in from the emailed link -->
-      <div id="finish" hidden>
-        <p>Almost there. Tap below to finish signing in on this device.</p>
-        <button class="btn" id="finish-btn" type="button">Finish signing in</button>
-      </div>
-
-      <!-- Signed out -->
+      <!-- Signed out: log in or create an account -->
       <form id="signin" hidden novalidate>
-        <p style="margin-top:0">Sign in with your email to upgrade. No password needed: we'll email you a link.</p>
-        <div class="row">
-          <label for="email" class="sr-only">Email address</label>
+        <h3 id="form-title" style="margin-top:0">Log in</h3>
+        <div class="field">
+          <label for="email">Email</label>
           <input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
-          <input class="sr-only" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
-          <button class="btn" type="submit">Email me a link</button>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required>
+          <p class="muted" id="pw-hint" hidden style="font-size:0.85rem;margin:4px 0 0">At least 8 characters.</p>
+        </div>
+        <input class="sr-only" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="row">
+          <button class="btn" type="submit" id="submit-btn">Log in</button>
+          <button class="btn secondary" type="button" id="switch-btn">Create an account</button>
         </div>
       </form>
 
@@ -74,7 +78,7 @@
       </div>
 
       <div id="msg" class="msg" role="status" aria-live="polite"></div>
-      <p id="signout-row" hidden style="margin-bottom:0"><button class="btn secondary small" id="signout-btn" type="button">Sign out</button></p>
+      <p id="signout-row" hidden style="margin-bottom:0"><button class="btn secondary small" id="signout-btn" type="button">Log out</button></p>
     </section>
   </main>
 
@@ -100,7 +104,7 @@
     }
 
     function render(me) {
-      for (const id of ['finish', 'signin', 'upgrade', 'active', 'signout-row']) $(id).hidden = true;
+      for (const id of ['signin', 'upgrade', 'active', 'signout-row']) $(id).hidden = true;
       document.querySelectorAll('.who').forEach((el) => { el.textContent = me.email || ''; });
       if (!me.signedIn) { $('signin').hidden = false; return; }
       $('signout-row').hidden = false;
@@ -132,53 +136,54 @@
 
     async function start() {
       const params = new URLSearchParams(location.search);
-      const token = params.get('token');
       const checkout = params.get('checkout');
-      // Drop the token from the address bar so it isn't bookmarked or shared.
-      if (token || checkout) history.replaceState(null, '', '/pro.html');
-
-      if (token) {
-        render({ signedIn: false });
-        $('signin').hidden = true;
-        $('finish').hidden = false;
-        $('finish-btn').onclick = async () => {
-          $('finish-btn').disabled = true;
-          try {
-            await post('/api/account?action=verify', { token });
-            show("You're signed in.", 'ok');
-            await loadMe();
-          } catch (err) {
-            show(err.message, 'err');
-            render({ signedIn: false });
-          } finally {
-            $('finish-btn').disabled = false;
-          }
-        };
-        return;
-      }
+      if (checkout) history.replaceState(null, '', '/pro.html');
 
       if (checkout === 'success') return waitForPro();
       await loadMe();
       if (checkout === 'cancelled') show('No problem. You can upgrade whenever you like.');
     }
 
+    // One form for both: "Log in" or "Create an account".
+    let mode = 'login';
+    function setMode(next) {
+      mode = next;
+      const signup = mode === 'signup';
+      $('form-title').textContent = signup ? 'Create your account' : 'Log in';
+      $('submit-btn').textContent = signup ? 'Create account' : 'Log in';
+      $('switch-btn').textContent = signup ? 'I already have an account' : 'Create an account';
+      $('password').autocomplete = signup ? 'new-password' : 'current-password';
+      $('pw-hint').hidden = !signup;
+      show('');
+    }
+    $('switch-btn').onclick = () => setMode(mode === 'login' ? 'signup' : 'login');
+    if (location.hash === '#signup') setMode('signup');
+
     $('signin').addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = event.target;
       const email = form.email.value.trim();
+      const password = form.password.value;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         show('Please enter a valid email address.', 'err');
         form.email.focus();
         return;
       }
-      const button = form.querySelector('button');
+      if (mode === 'signup' && password.length < 8) {
+        show('Please choose a password of at least 8 characters.', 'err');
+        form.password.focus();
+        return;
+      }
+      const button = $('submit-btn');
       button.disabled = true;
-      show('Sending…');
+      show(mode === 'signup' ? 'Creating your account…' : 'Logging in…');
       try {
-        const data = await post('/api/account?action=login', { email, company: form.company.value });
-        show(data.message, 'ok');
+        await post('/api/account?action=' + mode, { email, password, company: form.company.value });
+        form.password.value = '';
+        show(mode === 'signup' ? 'Welcome to CartCompare! Your account is ready.' : "You're logged in.", 'ok');
+        await loadMe();
       } catch (err) {
-        show(err.message + ' Please try again.', 'err');
+        show(err.message, 'err');
       } finally {
         button.disabled = false;
       }
@@ -200,7 +205,7 @@
 
     $('signout-btn').onclick = async () => {
       await post('/api/account?action=logout').catch(() => {});
-      show('Signed out.');
+      show("You're logged out.");
       render({ signedIn: false });
     };
 
