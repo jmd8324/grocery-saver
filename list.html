@@ -105,6 +105,11 @@
     #map { height: 340px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 16px; z-index: 0; }
     .pick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
     .pick-grid .pick { margin-bottom: 0; }
+    .pick .big-total { font-size: 2.25rem; font-weight: 700; line-height: 1.1; margin: 4px 0; }
+    .pick.compact { padding: 14px 20px; }
+    .pick.compact .store-name { font-size: 1.05rem; }
+    .pick.compact .big-total { font-size: 1.5rem; margin: 2px 0; }
+    .pick.compact .eyebrow { font-size: 0.75rem; }
     .pick { border-color: var(--brand); border-width: 2px; margin-bottom: 16px; }
     .pick .eyebrow { font-size: 0.85rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
     .pick .store-name { font-size: 1.3rem; font-weight: 700; }
@@ -627,7 +632,7 @@
       const column = (label, r, lines) => {
         const col = el('div', 'card pick');
         col.append(el('div', 'eyebrow', label), el('div', 'store-name', r.store.name),
-          el('p', 'muted', money(r.total) + ', ' + mi(r) + ' away.'));
+          el('div', 'big-total', money(r.total)), el('div', 'muted', mi(r) + ' away'));
         for (const t of lines) col.appendChild(el('p', 'muted', t));
         const go = el('p', '');
         go.style.marginTop = '12px';
@@ -658,8 +663,10 @@
       if (rec.closest !== rec.pick && rec.closest !== rec.cheapest) {
         const row = el('div', 'card pick');
         row.style.gridColumn = '1 / -1';
+        // A closest store that costs more than the pick gets a smaller card.
+        if (rec.closest.total > rec.pick.total) row.classList.add('compact');
         row.append(el('div', 'eyebrow', 'Closest to you'), el('div', 'store-name', rec.closest.store.name),
-          el('p', 'muted', money(rec.closest.total) + ', ' + mi(rec.closest) + ' away.'));
+          el('div', 'big-total', money(rec.closest.total)), el('div', 'muted', mi(rec.closest) + ' away'));
         const go = el('p', '');
         go.appendChild(directionsLink(rec.closest.store, 'Directions to ' + rec.closest.store.name));
         row.appendChild(go);
