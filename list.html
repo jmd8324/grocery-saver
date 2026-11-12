@@ -616,11 +616,11 @@
         maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
       const pts = [];
-      const pin = (point, text, cls, z) => {
+      const pin = (point, text, cls, z, title) => {
         const e = document.createElement('div');
         e.className = 'pin ' + cls;
         e.textContent = text;
-        L.marker([point.lat, point.lng], { icon: L.divIcon({ html: e, className: '', iconSize: [0, 0] }), title: text, zIndexOffset: z }).addTo(map);
+        L.marker([point.lat, point.lng], { icon: L.divIcon({ html: e, className: '', iconSize: [0, 0] }), title: title || text, zIndexOffset: z }).addTo(map);
         pts.push([point.lat, point.lng]);
       };
       const cheapest = lastRec ? lastRec.cheapest : res.ranked[0];
@@ -628,8 +628,11 @@
       res.ranked.forEach((r, i) => {
         const isBest = best && r === best, isCheap = r === cheapest;
         const cls = isBest ? 'best' : isCheap ? 'cheap' : '';
-        const text = (isBest ? '★ ' : '') + '#' + (i + 1) + ' ' + r.store.name + ' ' + CartCompare.money(r.total) + (nearest && nearest.id === r.store.id ? ' (closest)' : '');
-        for (const loc of locationsOf(r.store)) pin(loc, text, cls, (isBest ? 3000 : isCheap ? 2000 : 1000) - i * 10);
+        // Only #1 gets its rank and name; every other pin is just the price, to save space.
+        const price = CartCompare.money(r.total);
+        const text = (isBest ? '★ ' : '') + (i === 0 ? '#1 ' + r.store.name + ' ' + price : price);
+        const full = '#' + (i + 1) + ' ' + r.store.name + ' ' + price + (nearest && nearest.id === r.store.id ? ' (closest)' : '');
+        for (const loc of locationsOf(r.store)) pin(loc, text, cls, (isBest ? 3000 : isCheap ? 2000 : 1000) - i * 10, full);
       });
       res.noPrices.forEach((s) => { for (const loc of locationsOf(s)) pin(loc, s.name + ' (no prices yet)', 'nope', 0); });
       if (userLoc) pin(userLoc, 'You', 'you', 4000);
