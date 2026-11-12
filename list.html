@@ -103,6 +103,8 @@
     .addr-row { display: flex; gap: 12px; flex-wrap: wrap; }
     .addr-row input { flex: 1 1 260px; }
     #map { height: 340px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 16px; z-index: 0; }
+    .pick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .pick-grid .pick { margin-bottom: 0; }
     .pick { border-color: var(--brand); border-width: 2px; margin-bottom: 16px; }
     .pick .eyebrow { font-size: 0.85rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
     .pick .store-name { font-size: 1.3rem; font-weight: 700; }
@@ -620,39 +622,60 @@
       if (!rec) return null;
       const mi = (r) => milesTo(r.store).toFixed(1) + ' mi';
       const money = CartCompare.money;
-      const card = el('div', 'card pick');
-      const vsPriciest = rec.priciest === rec.pick ? ''
-        : ' Saves ' + money(rec.savingsVsPriciestCents) + ' vs ' + rec.priciest.store.name + ', the most expensive (' + money(rec.priciest.total) + ').';
-      if (rec.kind === 'both') {
-        card.append(el('div', 'eyebrow', 'Closest and cheapest'), el('div', 'store-name', rec.pick.store.name),
-          el('p', 'muted', money(rec.pick.total) + ', ' + mi(rec.pick) + ' away. It wins on both.' + vsPriciest));
-      } else if (rec.kind === 'cheapest') {
-        card.append(el('div', 'eyebrow', 'Cheapest, and worth the trip'), el('div', 'store-name', rec.pick.store.name),
-          el('p', 'muted', money(rec.pick.total) + ', ' + mi(rec.pick) + ' away.' + vsPriciest
-            + ' No closer store is within 10% of its price, so the trip is worth it.'));
-      } else {
-        card.append(el('div', 'eyebrow', 'Best balance of price and distance'), el('div', 'store-name', rec.pick.store.name),
-          el('p', 'muted', money(rec.pick.total) + ', ' + mi(rec.pick) + ' away.' + vsPriciest + ' ' + rec.cheapest.store.name + ' is cheaper by only '
-            + money(rec.extraCents) + ' (under 10%) but is ' + rec.milesSaved.toFixed(1) + ' mi farther, so ' + rec.pick.store.name + ' is the better trip.'));
-      }
-      const others = [];
-      if (rec.cheapest !== rec.pick) others.push(['Cheapest', rec.cheapest]);
-      if (rec.closest !== rec.pick && rec.closest !== rec.cheapest) others.push(['Closest', rec.closest]);
-      else if (rec.closest !== rec.pick) others[others.length - 1][0] = 'Cheapest and closest';
-      for (const [label, r] of others) {
-        const row = el('div', '');
-        row.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid var(--border)';
-        row.append(el('div', 'eyebrow', label), el('div', 'store-name', r.store.name),
+
+      // One column: label, store, numbers, explanation, and that store's own Directions button.
+      const column = (label, r, lines) => {
+        const col = el('div', 'card pick');
+        col.append(el('div', 'eyebrow', label), el('div', 'store-name', r.store.name),
           el('p', 'muted', money(r.total) + ', ' + mi(r) + ' away.'));
-        row.appendChild(directionsLink(r.store, 'Directions to ' + r.store.name));
-        card.appendChild(row);
+        for (const t of lines) col.appendChild(el('p', 'muted', t));
+        const go = el('p', '');
+        go.style.marginTop = '12px';
+        go.appendChild(directionsLink(r.store, 'Directions to ' + r.store.name));
+        col.appendChild(go);
+        return col;
+      };
+      const vs = (r) => (rec.priciest === r ? null
+        : 'Saves ' + money(rec.priciest.total - r.total) + ' vs ' + rec.priciest.store.name + ', the most expensive (' + money(rec.priciest.total) + ').');
+
+      // Left: best balance of price and distance. Right: cheapest, always.
+      const left = [], right = [];
+      if (vs(rec.pick)) left.push(vs(rec.pick));
+      if (rec.kind === 'closer') {
+        left.push(rec.cheapest.store.name + ' is cheaper by only ' + money(rec.extraCents) + ' (under 10%) but is ' + rec.milesSaved.toFixed(1)
+          + ' mi farther, so ' + rec.pick.store.name + ' is the better trip.');
+      } else if (rec.kind === 'cheapest') {
+        left.push('No closer store is within 10% of its price, so it is also the best trip.');
+      } else {
+        left.push('It is also the closest store.');
       }
-      const go = el('p', '');
-      go.appendChild(directionsLink(rec.pick.store, 'Directions to ' + rec.pick.store.name));
-      go.style.marginTop = '12px';
-      card.appendChild(go);
-      card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. If a store is more than half a mile closer than the cheapest and costs less than 10% more, we recommend it instead.'));
-      return card;
+      if (vs(rec.cheapest)) right.push(vs(rec.cheapest));
+
+      const wrap = el('div', 'pick-grid');
+      wrap.append(column('Best balance', rec.pick, left), column('Cheapest', rec.cheapest, right));
+
+      // The closest store, when it is neither of the two above.
+      if (rec.closest !== rec.pick && rec.closest !== rec.cheapest) {
+        const row = el('div', 'card pick');
+        row.style.gridColumn = '1 / -1';
+        row.append(el('div', 'eyebrow', 'Closest to you'), el('div', 'store-name', rec.closest.store.name),
+          el('p', 'muted', money(rec.closest.total) + ', ' + mi(rec.closest) + ' away.'));
+        const go = el('p', '');
+        go.appendChild(directionsLink(rec.closest.store, 'Directions to ' + rec.closest.store.name));
+        row.appendChild(go);
+        wrap.appendChild(row);
+      }
+      if (nearest && nearest.id !== rec.closest.store.id) {
+        const nr = res.ranked.find((r) => r.store.id === nearest.id);
+        const note = el('p', 'fine', 'Closest to you overall is ' + nearest.name + ' (' + milesTo(nearest).toFixed(1) + ' mi), but it has '
+          + (nr ? nr.found + ' of ' + res.itemCount + ' items priced' : 'no prices yet') + ', so it is not compared on price.');
+        note.style.gridColumn = '1 / -1';
+        wrap.appendChild(note);
+      }
+      const fine = el('p', 'fine', 'Distances are straight-line, not driving. If a store is more than half a mile closer than the cheapest and costs less than 10% more, we pick it as the best balance.');
+      fine.style.gridColumn = '1 / -1';
+      wrap.appendChild(fine);
+      return wrap;
     }
 
     let nearest = null;
