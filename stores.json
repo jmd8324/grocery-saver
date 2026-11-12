@@ -7,14 +7,13 @@
   "loyaltyPrograms": [
     { "id": "giant-choice", "name": "GIANT Choice Rewards", "chain": "GIANT", "cost": "Free", "note": "Card prices plus gas points" },
     { "id": "weis-rewards", "name": "Weis Rewards", "chain": "Weis Markets", "cost": "Free", "note": "Card prices plus points toward groceries or gas" },
-    { "id": "wegmans-shoppers-club", "name": "Wegmans Shoppers Club", "chain": "Wegmans", "cost": "Free", "note": "Digital coupons and member prices" },
-    { "id": "walmart-plus", "name": "Walmart+", "chain": "Walmart", "cost": "Paid membership", "note": "Free delivery and fuel discounts; shelf prices are the same" }
+    { "id": "wegmans-shoppers-club", "name": "Wegmans Shoppers Club", "chain": "Wegmans", "cost": "Free", "note": "Digital coupons and member prices" }
   ],
   "stores": [
     { "id": "giant-s-atherton", "chain": "GIANT", "name": "GIANT", "address": "2121 S Atherton St", "zip": "16801", "loyalty": "giant-choice", "priceColumn": "giant" },
     { "id": "weis-westerly", "chain": "Weis Markets", "name": "Weis Markets", "address": "560 Westerly Pkwy", "zip": "16801", "loyalty": "weis-rewards", "priceColumn": "weis" },
     { "id": "wegmans", "chain": "Wegmans", "name": "Wegmans", "address": "345 Colonnade Blvd", "zip": "16803", "loyalty": "wegmans-shoppers-club", "priceColumn": "wegmans" },
-    { "id": "walmart", "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": "walmart-plus", "priceColumn": "walmart" },
+    { "id": "walmart", "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "walmart" },
     { "id": "aldi", "chain": "ALDI", "name": "ALDI", "address": "1798 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "aldi" }
   ]
 }
