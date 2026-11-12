@@ -565,6 +565,13 @@
       return a;
     }
 
+    // The store nearest the shopper among every store we know about (even ones with fewer prices).
+    function nearestStore(res) {
+      if (!userLoc) return null;
+      const all = [...res.ranked.map((r) => r.store), ...res.noPrices].filter((s) => s.lat != null);
+      return all.length ? all.reduce((a, b) => (milesTo(b) < milesTo(a) ? b : a)) : null;
+    }
+
     async function geocode(q) {
       // Nominatim (OpenStreetMap), called from the shopper's browser, biased to the State College area.
       const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us'
@@ -591,15 +598,25 @@
         L.marker([point.lat, point.lng], { icon: L.divIcon({ html: e, className: '', iconSize: [0, 0] }), title: text }).addTo(map);
         pts.push([point.lat, point.lng]);
       };
-      res.ranked.forEach((r, i) => { if (r.store.lat != null) pin(r.store, '#' + (i + 1) + ' ' + r.store.name + ' ' + CartCompare.money(r.total), i === 0 ? 'first' : ''); });
-      res.noPrices.forEach((s) => { if (s.lat != null) pin(s, s.name + ' (no prices yet)', 'nope'); });
+      res.ranked.forEach((r, i) => { if (r.store.lat != null) pin(r.store, '#' + (i + 1) + ' ' + r.store.name + ' ' + CartCompare.money(r.total) + (nearest && nearest.id === r.store.id ? ' (closest)' : ''), i === 0 ? 'first' : ''); });
+      res.noPrices.forEach((s) => { if (s.lat != null) pin(s, s.name + ' (no prices yet)' + (nearest && nearest.id === s.id ? ' (closest)' : ''), 'nope'); });
       if (userLoc) pin(userLoc, 'You', 'you');
       if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
       else map.setView([40.7934, -77.86], 12);
     }
 
     function pickCard(res) {
-      const rec = userLoc ? CartCompare.recommend(res.ranked, Object.fromEntries(res.ranked.map((r) => [r.store.id, milesTo(r.store)]))) : null;
+      if (!userLoc) {
+        const ask = el('div', 'card pick');
+        ask.append(el('div', 'eyebrow', 'Which store is closest?'),
+          el('p', 'muted', 'Add your address to see which store is closest to you and whether the cheapest one is worth the trip.'));
+        const b = el('button', 'btn secondary small', 'Add my address');
+        b.type = 'button';
+        b.addEventListener('click', () => { $('s6').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('addr').focus(); });
+        ask.appendChild(b);
+        return ask;
+      }
+      const rec = CartCompare.recommend(res.ranked, Object.fromEntries(res.ranked.map((r) => [r.store.id, milesTo(r.store)])));
       if (!rec) return null;
       const mi = (r) => milesTo(r.store).toFixed(1) + ' mi';
       const card = el('div', 'card pick');
@@ -624,6 +641,11 @@
         cheap.appendChild(directionsLink(rec.cheapest.store, 'Directions to ' + rec.cheapest.store.name));
         card.appendChild(cheap);
       }
+      if (nearest && nearest.id !== rec.closest.store.id) {
+        const nr = res.ranked.find((r) => r.store.id === nearest.id);
+        card.appendChild(el('p', 'fine', 'Closest to you overall is ' + nearest.name + ' (' + milesTo(nearest).toFixed(1) + ' mi), but it has '
+          + (nr ? nr.found + ' of ' + res.itemCount + ' items priced' : 'no prices yet') + ', so it is not compared on price.'));
+      }
       const go = el('p', '');
       go.appendChild(directionsLink(rec.pick.store, 'Directions to ' + rec.pick.store.name));
       if (rec.kind === 'closest') go.style.marginTop = '12px';
@@ -632,12 +654,13 @@
       return card;
     }
 
+    let nearest = null;
     function storeDetails(r, itemCount, open) {
       const d = document.createElement('details');
       d.open = open;
       const sum = document.createElement('summary');
       sum.append(el('strong', '', r.store.name), el('span', 'total', CartCompare.money(r.total)),
-        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + r.store.address + (milesTo(r.store) != null ? ' · ' + milesTo(r.store).toFixed(1) + ' mi away' : '')));
+        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + r.store.address + (milesTo(r.store) != null ? ' · ' + milesTo(r.store).toFixed(1) + ' mi away' : '') + (nearest && nearest.id === r.store.id ? ' · CLOSEST TO YOU' : '')));
       const ul = el('ul', 'lines');
       for (const l of r.lines) {
         const li = document.createElement('li');
@@ -664,6 +687,7 @@
 
     function renderResults(res, keepScroll) {
       lastRes = res;
+      nearest = nearestStore(res);
       const box = $('results');
       box.innerHTML = '';
       box.hidden = false;
