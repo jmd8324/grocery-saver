@@ -619,38 +619,39 @@
       const rec = CartCompare.recommend(res.ranked, Object.fromEntries(res.ranked.map((r) => [r.store.id, milesTo(r.store)])));
       if (!rec) return null;
       const mi = (r) => milesTo(r.store).toFixed(1) + ' mi';
+      const money = CartCompare.money;
       const card = el('div', 'card pick');
-      const total = (r) => CartCompare.money(r.total);
+      const vsPriciest = rec.priciest === rec.pick ? ''
+        : ' Saves ' + money(rec.savingsVsPriciestCents) + ' vs ' + rec.priciest.store.name + ', the most expensive (' + money(rec.priciest.total) + ').';
       if (rec.kind === 'both') {
         card.append(el('div', 'eyebrow', 'Closest and cheapest'), el('div', 'store-name', rec.pick.store.name),
-          el('p', 'muted', total(rec.pick) + ', ' + mi(rec.pick) + ' away. It wins on both.'));
+          el('p', 'muted', money(rec.pick.total) + ', ' + mi(rec.pick) + ' away. It wins on both.' + vsPriciest));
       } else if (rec.kind === 'cheapest') {
-        card.append(el('div', 'eyebrow', 'Cheapest, and worth the trip'), el('div', 'store-name', rec.cheapest.store.name),
-          el('p', 'muted', total(rec.cheapest) + ', ' + mi(rec.cheapest) + ' away. '
-            + (rec.savingsCents >= rec.closest.total * 0.10
-              ? 'It saves ' + CartCompare.money(rec.savingsCents) + ' (10% or more) vs ' + rec.closest.store.name + ', your closest store (' + mi(rec.closest) + ', ' + total(rec.closest) + ').'
-              : 'It is only ' + rec.extraMiles.toFixed(1) + ' mi farther than ' + rec.closest.store.name + ', your closest store, so it is worth the small detour.')));
+        card.append(el('div', 'eyebrow', 'Cheapest, and worth the trip'), el('div', 'store-name', rec.pick.store.name),
+          el('p', 'muted', money(rec.pick.total) + ', ' + mi(rec.pick) + ' away.' + vsPriciest
+            + ' No closer store is within 10% of its price, so the trip is worth it.'));
       } else {
-        card.append(el('div', 'eyebrow', 'Closest (recommended)'), el('div', 'store-name', rec.closest.store.name),
-          el('p', 'muted', total(rec.closest) + ', ' + mi(rec.closest) + ' away. Why: ' + rec.cheapest.store.name + ' is cheaper by only ' + CartCompare.money(rec.savingsCents)
-            + ' (under 10%) but is ' + rec.extraMiles.toFixed(1) + ' mi farther, so the closer store is the better trip.'));
-        const cheap = el('div', '');
-        cheap.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid var(--border)';
-        cheap.append(el('div', 'eyebrow', 'Cheapest'), el('div', 'store-name', rec.cheapest.store.name),
-          el('p', 'muted', total(rec.cheapest) + ', ' + mi(rec.cheapest) + ' away.'));
-        cheap.appendChild(directionsLink(rec.cheapest.store, 'Directions to ' + rec.cheapest.store.name));
-        card.appendChild(cheap);
+        card.append(el('div', 'eyebrow', 'Best balance of price and distance'), el('div', 'store-name', rec.pick.store.name),
+          el('p', 'muted', money(rec.pick.total) + ', ' + mi(rec.pick) + ' away.' + vsPriciest + ' ' + rec.cheapest.store.name + ' is cheaper by only '
+            + money(rec.extraCents) + ' (under 10%) but is ' + rec.milesSaved.toFixed(1) + ' mi farther, so ' + rec.pick.store.name + ' is the better trip.'));
       }
-      if (nearest && nearest.id !== rec.closest.store.id) {
-        const nr = res.ranked.find((r) => r.store.id === nearest.id);
-        card.appendChild(el('p', 'fine', 'Closest to you overall is ' + nearest.name + ' (' + milesTo(nearest).toFixed(1) + ' mi), but it has '
-          + (nr ? nr.found + ' of ' + res.itemCount + ' items priced' : 'no prices yet') + ', so it is not compared on price.'));
+      const others = [];
+      if (rec.cheapest !== rec.pick) others.push(['Cheapest', rec.cheapest]);
+      if (rec.closest !== rec.pick && rec.closest !== rec.cheapest) others.push(['Closest', rec.closest]);
+      else if (rec.closest !== rec.pick) others[others.length - 1][0] = 'Cheapest and closest';
+      for (const [label, r] of others) {
+        const row = el('div', '');
+        row.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid var(--border)';
+        row.append(el('div', 'eyebrow', label), el('div', 'store-name', r.store.name),
+          el('p', 'muted', money(r.total) + ', ' + mi(r) + ' away.'));
+        row.appendChild(directionsLink(r.store, 'Directions to ' + r.store.name));
+        card.appendChild(row);
       }
       const go = el('p', '');
       go.appendChild(directionsLink(rec.pick.store, 'Directions to ' + rec.pick.store.name));
-      if (rec.kind === 'closest') go.style.marginTop = '12px';
+      go.style.marginTop = '12px';
       card.appendChild(go);
-      card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. We recommend the closest store when the cheapest saves under 10% and is more than half a mile farther.'));
+      card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. If a store is more than half a mile closer than the cheapest and costs less than 10% more, we recommend it instead.'));
       return card;
     }
 
@@ -721,6 +722,7 @@
       mapBox.setAttribute('aria-label', 'Map of stores with your list total and rank');
       box.appendChild(mapBox);
       drawMap(res);
+      box.appendChild(el('p', 'fine', 'GIANT, Walmart and Weis each have more than one store in the State College area. The map shows one location for each, so the nearest one to you may be different. We use one price per chain.'));
 
       const list = el('div', 'results-list');
       res.ranked.forEach((r, i) => list.appendChild(storeDetails(r, res.itemCount, i === 0)));

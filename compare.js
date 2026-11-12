@@ -249,29 +249,36 @@ var CartCompare = (function () {
     return 3958.8 * 2 * Math.asin(Math.sqrt(h));
   }
 
-  // Closest vs cheapest:
-  //  - price gap under 10% of the closest store's total AND the closest store is
-  //    more than half a mile nearer: recommend the closest (the saving is small),
-  //    and still show the cheapest.
-  //  - otherwise recommend the cheapest (a 10%+ saving, or the closest is barely closer).
+  // Which store to shop at, given the shopper's distance to each.
+  // Only stores that price as much of the list as the best one are compared,
+  // since a store missing items always looks cheaper.
+  //  1. Start from the cheapest store.
+  //  2. If another store is MORE than half a mile closer than it and costs less than
+  //     10% more than the cheapest, the saving isn't worth the longer trip: recommend
+  //     the closest of those instead.
+  //  3. Savings are always shown against the most expensive store.
   const BIG_PRICE_GAP = 0.10;
   const FAR_MILES = 0.5;
 
-  // ranked: compare() result; miles: { storeId: miles } from the shopper's address.
-  // Only stores that price as much of the list as the best one are compared,
-  // since a store missing items always looks cheaper.
   function recommend(ranked, miles) {
     if (!ranked.length) return null;
     const tier = ranked.filter((r) => r.found === ranked[0].found && miles[r.store.id] != null);
     if (!tier.length) return null;
     const cheapest = tier.reduce((a, b) => (b.total < a.total ? b : a));
     const closest = tier.reduce((a, b) => (miles[b.store.id] < miles[a.store.id] ? b : a));
-    if (cheapest === closest) return { kind: 'both', pick: cheapest, cheapest, closest, savingsCents: 0, extraMiles: 0 };
-    const savingsCents = closest.total - cheapest.total;
-    const extraMiles = miles[cheapest.store.id] - miles[closest.store.id];
-    const smallSaving = savingsCents < closest.total * BIG_PRICE_GAP;
-    const kind = smallSaving && extraMiles > FAR_MILES ? 'closest' : 'cheapest';
-    return { kind, pick: kind === 'closest' ? closest : cheapest, cheapest, closest, savingsCents, extraMiles };
+    const priciest = tier.reduce((a, b) => (b.total > a.total ? b : a));
+    // Stores that are nearly as cheap as the cheapest but clearly closer to the shopper.
+    const nearlyAsCheap = tier.filter((r) => r !== cheapest
+      && r.total - cheapest.total < r.total * BIG_PRICE_GAP
+      && miles[cheapest.store.id] - miles[r.store.id] > FAR_MILES);
+    const pick = nearlyAsCheap.length ? nearlyAsCheap.reduce((a, b) => (miles[b.store.id] < miles[a.store.id] ? b : a)) : cheapest;
+    const kind = pick === cheapest ? (pick === closest ? 'both' : 'cheapest') : 'closer';
+    return {
+      kind, pick, cheapest, closest, priciest,
+      savingsVsPriciestCents: priciest.total - pick.total,       // what the pick saves vs the most expensive store
+      extraCents: pick.total - cheapest.total,                   // what the pick costs over the cheapest
+      milesSaved: miles[cheapest.store.id] - miles[pick.store.id], // how much closer the pick is than the cheapest
+    };
   }
 
   const money = (cents) => '$' + (cents / 100).toFixed(2);
