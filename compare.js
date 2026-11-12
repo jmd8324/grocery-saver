@@ -239,7 +239,49 @@ var CartCompare = (function () {
     };
   }
 
+
+  // ---------- Distance and "where should I go?" ----------
+  // Straight-line miles between two { lat, lng } points (not driving distance).
+  function distanceMiles(a, b) {
+    const rad = (d) => (d * Math.PI) / 180;
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 3958.8 * 2 * Math.asin(Math.sqrt(h));
+  }
+
+  // Which store to shop at, given the shopper's distance to each.
+  // Only stores that price as much of the list as the best one are compared,
+  // since a store missing items always looks cheaper.
+  //  1. Start from the cheapest store.
+  //  2. If another store is MORE than half a mile closer than it and costs less than
+  //     10% more than the cheapest, the saving isn't worth the longer trip: recommend
+  //     the closest of those instead.
+  //  3. Savings are always shown against the most expensive store.
+  const BIG_PRICE_GAP = 0.10;
+  const FAR_MILES = 0.5;
+
+  function recommend(ranked, miles) {
+    if (!ranked.length) return null;
+    const tier = ranked.filter((r) => r.found === ranked[0].found && miles[r.store.id] != null);
+    if (!tier.length) return null;
+    const cheapest = tier.reduce((a, b) => (b.total < a.total ? b : a));
+    const closest = tier.reduce((a, b) => (miles[b.store.id] < miles[a.store.id] ? b : a));
+    const priciest = tier.reduce((a, b) => (b.total > a.total ? b : a));
+    // Stores that are nearly as cheap as the cheapest but clearly closer to the shopper.
+    const nearlyAsCheap = tier.filter((r) => r !== cheapest
+      && r.total - cheapest.total < r.total * BIG_PRICE_GAP
+      && miles[cheapest.store.id] - miles[r.store.id] > FAR_MILES);
+    const pick = nearlyAsCheap.length ? nearlyAsCheap.reduce((a, b) => (miles[b.store.id] < miles[a.store.id] ? b : a)) : cheapest;
+    const kind = pick === cheapest ? (pick === closest ? 'both' : 'cheapest') : 'closer';
+    return {
+      kind, pick, cheapest, closest, priciest,
+      savingsVsPriciestCents: priciest.total - pick.total,       // what the pick saves vs the most expensive store
+      extraCents: pick.total - cheapest.total,                   // what the pick costs over the cheapest
+      milesSaved: miles[cheapest.store.id] - miles[pick.store.id], // how much closer the pick is than the cheapest
+    };
+  }
+
   const money = (cents) => '$' + (cents / 100).toFixed(2);
 
-  return { parseCSV, toCents, norm, multiplier, matchRows: (item, rows) => matchRows(item, prepareRows(rows)), compare, money };
+  return { parseCSV, toCents, norm, multiplier, matchRows: (item, rows) => matchRows(item, prepareRows(rows)), compare, money, distanceMiles, recommend };
 })();
