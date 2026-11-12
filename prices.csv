@@ -1,6 +1,6 @@
 item,also_called,brand,size,giant,giant_member,weis,weis_member,wegmans,wegmans_member,target,target_member,walmart,aldi,trader_joes,sams_club,checked_on,notes
-milk,whole milk; gallon of milk,,1 gallon,,,,,,,,,,,,,,
-2% milk,reduced fat milk; 2 percent milk; milk,,1 gallon,,,,,,,,,,,,,,
+milk,skim milk; whole milk; gallon of milk,,1 gallon,2.57,2.57,2.69,2.69,2.82,2.82,,,2.8,2.8,,,2026-11-12,
+2% milk,reduced fat milk; 2 percent milk; milk,,1 gallon,2.63,2.63,2.89,2.89,2.71,2.71,,,2.7,2.7,,,2026-11-12,
 eggs,large eggs; dozen eggs; egg,,1 dozen,,,,1.99,,,,,,,,,2026-10-29,
 butter,salted butter,,1 lb,,,,0.99,,,,,,,,,2026-10-29,
 shredded cheese,shredded cheddar; cheddar cheese; cheese,,8 oz,1.77,,2.00,,2.29,,,,2.87,,,,2026-11-06,
