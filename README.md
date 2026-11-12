@@ -55,7 +55,7 @@ photos need the reader.
 - **Store columns** are the regular shelf price, like `3.99`. The `_member` columns are the loyalty-card price,
   used only for shoppers who pick that card. Leave blank if there's no card price.
 - **`checked_on`**: the date you checked, like `2026-11-03`. Shoppers see this.
-- GIANT's two stores share the `giant` columns. Sam's Club is only included for shoppers who pick the membership.
+- Each store has one price column in `prices.csv` (GIANT uses the `giant` columns).
 
 Blank cells are fine. Each store's results show how many items were priced, and stores with more of
 the list priced are ranked first so missing items can't make a store look cheaper.
