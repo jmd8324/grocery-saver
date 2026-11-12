@@ -185,7 +185,11 @@ var CartCompare = (function () {
 
     for (const item of items) {
       const matches = matchRows(item, rows);
-      const loose = looseRows(item, rows).filter((r) => !matches.includes(r));
+      // The AI reader already named every product that fits (item.matches), so the
+      // loose "any row containing the word" guess is only for items without that
+      // list. It was matching "milk" to a protein milk shake.
+      const hasAiMatches = Array.isArray(item.matches) && item.matches.length > 0;
+      const loose = hasAiMatches ? [] : looseRows(item, rows).filter((r) => !matches.includes(r));
       let pricedSomewhere = false;
       for (const res of results) {
         const cheapest = (list) => {
