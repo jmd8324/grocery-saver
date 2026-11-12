@@ -224,10 +224,11 @@
     <!-- Step 6: Address (optional) -->
     <section class="step card" hidden aria-labelledby="s6">
       <h2 id="s6"><span class="num">6</span>Where are you? <span class="muted" style="font-weight:400">(optional)</span></h2>
-      <p class="muted">Add your street address to see how far each store is and get a "where to shop" pick. Your address is only used to find it on the map. We don't save it, and it's gone when you leave the page.</p>
+      <p class="muted">Add your street address to see how far each store is and get a "where to shop" pick. Your address is only used to find it on the map. We don't save it, and it's gone when you leave the page. Or tap "Use my location" to use your device's GPS.</p>
       <form class="addr-row" id="addr-form">
         <input type="text" id="addr" placeholder="123 Main St, State College, PA" autocomplete="street-address" aria-label="Your street address">
         <button class="btn secondary" type="submit" id="addr-btn">Find me</button>
+        <button class="btn secondary" type="button" id="geo-btn">Use my location</button>
       </form>
       <div id="addr-msg" class="msg" role="status" aria-live="polite"></div>
     </section>
@@ -547,6 +548,23 @@
     let map = null;
     const milesTo = (store) => (userLoc && store.lat != null ? CartCompare.distanceMiles(userLoc, store) : null);
 
+    // Opens the shopper's own maps app: Apple Maps on iPhone/iPad, Google Maps elsewhere. No account or key needed.
+    const isApple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    function directionsLink(store, label) {
+      const dest = encodeURIComponent(store.name + ', ' + store.address + ', State College, PA ' + store.zip);
+      const a = document.createElement('a');
+      a.className = 'btn secondary small';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      if (isApple) {
+        a.href = 'https://maps.apple.com/?dirflg=d&daddr=' + dest + (userLoc ? '&saddr=' + userLoc.lat + ',' + userLoc.lng : '');
+      } else {
+        a.href = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + dest + (userLoc ? '&origin=' + userLoc.lat + ',' + userLoc.lng : '');
+      }
+      a.textContent = label || 'Directions';
+      return a;
+    }
+
     async function geocode(q) {
       // Nominatim (OpenStreetMap), called from the shopper's browser, biased to the State College area.
       const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us'
@@ -596,6 +614,9 @@
         card.appendChild(el('p', 'muted', 'Closest store, ' + mi(rec.pick) + ' away, at ' + CartCompare.money(rec.pick.total) + '. ' + rec.cheapest.store.name + ' is cheaper by only '
           + CartCompare.money(rec.savingsCents) + ', which is too small to be worth the extra trip.'));
       }
+      const go = el('p', '');
+      go.appendChild(directionsLink(rec.pick.store, 'Directions to ' + rec.pick.store.name));
+      card.appendChild(go);
       card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. A saving counts as worth the trip at $3 or more and 10% or more of your bill.'));
       return card;
     }
@@ -623,7 +644,10 @@
         li.append(el('span', '', 'No price yet: ' + r.missing.map(itemLabel).join(', ')));
         ul.appendChild(li);
       }
-      d.append(sum, ul);
+      const dir = el('p', '');
+      dir.style.margin = '12px 0 0';
+      dir.appendChild(directionsLink(r.store, 'Directions to ' + r.store.name));
+      d.append(sum, ul, dir);
       return d;
     }
 
@@ -735,6 +759,23 @@
       } finally {
         btn.disabled = false;
       }
+    });
+
+    $('geo-btn').addEventListener('click', () => {
+      if (!navigator.geolocation) { show($('addr-msg'), "Your browser can't share its location. Type your address instead.", 'err'); return; }
+      const btn = $('geo-btn');
+      btn.disabled = true;
+      show($('addr-msg'), 'Asking your device for your location…', '');
+      navigator.geolocation.getCurrentPosition((pos) => {
+        userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        $('addr').value = '';
+        show($('addr-msg'), 'Using your device location. Distances are on the map and in your results.', 'ok');
+        if (lastRes) renderResults(lastRes, true);
+        btn.disabled = false;
+      }, () => {
+        show($('addr-msg'), "We couldn't get your location. Allow location access for this site, or type your address instead.", 'err');
+        btn.disabled = false;
+      }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
     });
 
     // ---------- Pro gate ----------
