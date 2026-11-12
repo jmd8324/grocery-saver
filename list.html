@@ -102,21 +102,27 @@
     [hidden] { display: none !important; }
     .addr-row { display: flex; gap: 12px; flex-wrap: wrap; }
     .addr-row input { flex: 1 1 260px; }
-    #map { height: 340px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 16px; z-index: 0; }
+    #map { height: 420px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 16px; z-index: 0; }
+    @media (max-width: 600px) { #map { height: 340px; } }
     .pick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
     .pick-grid .pick { margin-bottom: 0; }
+    .pick { border-color: var(--brand); border-width: 2px; margin-bottom: 16px; }
+    .pick .eyebrow { font-size: 0.85rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
+    .pick .store-name { font-size: 1.3rem; font-weight: 700; }
     .pick .big-total { font-size: 2.25rem; font-weight: 700; line-height: 1.1; margin: 4px 0; }
     .pick.compact { padding: 14px 20px; }
     .pick.compact .store-name { font-size: 1.05rem; }
     .pick.compact .big-total { font-size: 1.5rem; margin: 2px 0; }
     .pick.compact .eyebrow { font-size: 0.75rem; }
-    .pick { border-color: var(--brand); border-width: 2px; margin-bottom: 16px; }
-    .pick .eyebrow { font-size: 0.85rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
-    .pick .store-name { font-size: 1.3rem; font-weight: 700; }
-    .pin { background: var(--brand); color: #fff; font: 700 12px/1.2 system-ui, sans-serif; padding: 4px 8px; border-radius: 999px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.35); transform: translate(-50%, -100%); width: max-content; }
-    .pin.first { background: #b45309; }
-    .pin.nope { background: #6b7280; }
-    .pin.you { background: #1d4ed8; }
+    .pin { --pin: #475569; position: relative; background: var(--pin); color: #fff; font: 700 13px/1.2 system-ui, sans-serif; padding: 5px 10px; border-radius: 999px; white-space: nowrap; box-shadow: 0 1px 5px rgba(0,0,0,.4); transform: translate(-50%, calc(-100% - 9px)); width: max-content; }
+    .pin::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: var(--pin); }
+    .pin.best { --pin: #15803d; font-size: 14px; padding: 6px 12px; }
+    .pin.cheap { --pin: #b45309; }
+    .pin.nope { --pin: #9ca3af; font-weight: 600; }
+    .pin.you { --pin: #1d4ed8; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
   </style>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
@@ -553,12 +559,23 @@
     let userLoc = null;   // { lat, lng } for this visit only; never saved or sent to our server
     let lastRes = null;
     let map = null;
-    const milesTo = (store) => (userLoc && store.lat != null ? CartCompare.distanceMiles(userLoc, store) : null);
+    // Each chain can have several locations: the store entry itself is the first, "others" the rest.
+    const locationsOf = (s) => [s, ...(s.others || [])].filter((l) => l.lat != null);
+    // The location of a chain nearest the shopper (the first one when no address is set).
+    function nearestLoc(store) {
+      const locs = locationsOf(store);
+      if (!locs.length) return null;
+      if (!userLoc) return locs[0];
+      return locs.reduce((a, b) => (CartCompare.distanceMiles(userLoc, b) < CartCompare.distanceMiles(userLoc, a) ? b : a));
+    }
+    const milesTo = (store) => { const l = userLoc && nearestLoc(store); return l ? CartCompare.distanceMiles(userLoc, l) : null; };
+    let lastRec = null;   // the latest pick, so the map can colour its pins
 
     // Opens the shopper's own maps app: Apple Maps on iPhone/iPad, Google Maps elsewhere. No account or key needed.
     const isApple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     function directionsLink(store, label) {
-      const dest = encodeURIComponent(store.name + ', ' + store.address + ', State College, PA ' + store.zip);
+      const loc = nearestLoc(store) || store;
+      const dest = encodeURIComponent(store.name + ', ' + loc.address + ', State College, PA ' + loc.zip);
       const a = document.createElement('a');
       a.className = 'btn secondary small';
       a.target = '_blank';
@@ -594,25 +611,46 @@
       if (!box || typeof L === 'undefined') { if (box) box.hidden = true; return; }
       if (map) { map.remove(); map = null; }
       map = L.map(box, { scrollWheelZoom: false });
+      map.on('click', () => map.scrollWheelZoom.enable());   // wheel zoom only after a click, so the page still scrolls
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
       const pts = [];
-      const pin = (point, text, cls) => {
+      const pin = (point, text, cls, z) => {
         const e = document.createElement('div');
         e.className = 'pin ' + cls;
         e.textContent = text;
-        L.marker([point.lat, point.lng], { icon: L.divIcon({ html: e, className: '', iconSize: [0, 0] }), title: text }).addTo(map);
+        L.marker([point.lat, point.lng], { icon: L.divIcon({ html: e, className: '', iconSize: [0, 0] }), title: text, zIndexOffset: z }).addTo(map);
         pts.push([point.lat, point.lng]);
       };
-      res.ranked.forEach((r, i) => { if (r.store.lat != null) pin(r.store, '#' + (i + 1) + ' ' + r.store.name + ' ' + CartCompare.money(r.total) + (nearest && nearest.id === r.store.id ? ' (closest)' : ''), i === 0 ? 'first' : ''); });
-      res.noPrices.forEach((s) => { if (s.lat != null) pin(s, s.name + ' (no prices yet)' + (nearest && nearest.id === s.id ? ' (closest)' : ''), 'nope'); });
-      if (userLoc) pin(userLoc, 'You', 'you');
-      if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
+      const cheapest = lastRec ? lastRec.cheapest : res.ranked[0];
+      const best = lastRec ? lastRec.pick : null;
+      res.ranked.forEach((r, i) => {
+        const isBest = best && r === best, isCheap = r === cheapest;
+        const cls = isBest ? 'best' : isCheap ? 'cheap' : '';
+        const text = (isBest ? '★ ' : '') + '#' + (i + 1) + ' ' + r.store.name + ' ' + CartCompare.money(r.total) + (nearest && nearest.id === r.store.id ? ' (closest)' : '');
+        for (const loc of locationsOf(r.store)) pin(loc, text, cls, (isBest ? 3000 : isCheap ? 2000 : 1000) - i * 10);
+      });
+      res.noPrices.forEach((s) => { for (const loc of locationsOf(s)) pin(loc, s.name + ' (no prices yet)', 'nope', 0); });
+      if (userLoc) pin(userLoc, 'You', 'you', 4000);
+      if (pts.length) map.fitBounds(pts, { padding: [50, 50], maxZoom: 15 });
       else map.setView([40.7934, -77.86], 12);
     }
 
+    function legend(res) {
+      const lg = el('div', 'legend');
+      const item = (color, text) => { const s = document.createElement('span'); const i = document.createElement('i'); i.style.background = color; s.append(i, text); lg.appendChild(s); };
+      if (lastRec && lastRec.pick !== lastRec.cheapest) item('#15803d', 'Best balance');
+      else if (lastRec) item('#15803d', 'Best balance and cheapest');
+      if (!lastRec || lastRec.pick !== lastRec.cheapest) item('#b45309', 'Cheapest');
+      item('#475569', 'Other stores');
+      if (res.noPrices.length) item('#9ca3af', 'No prices yet');
+      if (userLoc) item('#1d4ed8', 'You');
+      return lg;
+    }
+
     function pickCard(res) {
+      lastRec = null;
       if (!userLoc) {
         const ask = el('div', 'card pick');
         ask.append(el('div', 'eyebrow', 'Which store is closest?'),
@@ -625,6 +663,7 @@
       }
       const rec = CartCompare.recommend(res.ranked, Object.fromEntries(res.ranked.map((r) => [r.store.id, milesTo(r.store)])));
       if (!rec) return null;
+      lastRec = rec;
       const mi = (r) => milesTo(r.store).toFixed(1) + ' mi';
       const money = CartCompare.money;
 
@@ -641,20 +680,20 @@
         return col;
       };
       const vs = (r) => (rec.priciest === r ? null
-        : 'Saves ' + money(rec.priciest.total - r.total) + ' vs ' + rec.priciest.store.name + ', the most expensive (' + money(rec.priciest.total) + ').');
+        : 'Saves ' + money(rec.priciest.total - r.total) + ' vs ' + rec.priciest.store.name + ', the most expensive.');
 
       // Left: best balance of price and distance. Right: cheapest, always.
       const left = [], right = [];
-      if (vs(rec.pick)) left.push(vs(rec.pick));
       if (rec.kind === 'closer') {
-        left.push(rec.cheapest.store.name + ' is cheaper by only ' + money(rec.extraCents) + ' (under 10%) but is ' + rec.milesSaved.toFixed(1)
-          + ' mi farther, so ' + rec.pick.store.name + ' is the better trip.');
+        left.push(rec.cheapest.store.name + ' is only ' + money(rec.extraCents) + ' cheaper (under 10%) but ' + rec.milesSaved.toFixed(1) + ' mi farther.');
       } else if (rec.kind === 'cheapest') {
-        left.push('No closer store is within 10% of its price, so it is also the best trip.');
+        left.push('Cheapest, and no closer store is within 10% of its price.');
       } else {
-        left.push('It is also the closest store.');
+        left.push('Cheapest and closest.');
       }
-      if (vs(rec.cheapest)) right.push(vs(rec.cheapest));
+      if (vs(rec.pick)) left.push(vs(rec.pick));
+      if (rec.cheapest === rec.pick) right.push('Same store as Best balance.');
+      else if (vs(rec.cheapest)) right.push(vs(rec.cheapest));
 
       const wrap = el('div', 'pick-grid');
       wrap.append(column('Best balance', rec.pick, left), column('Cheapest', rec.cheapest, right));
@@ -667,6 +706,7 @@
         if (rec.closest.total > rec.pick.total) row.classList.add('compact');
         row.append(el('div', 'eyebrow', 'Closest to you'), el('div', 'store-name', rec.closest.store.name),
           el('div', 'big-total', money(rec.closest.total)), el('div', 'muted', mi(rec.closest) + ' away'));
+        if (rec.closest.total > rec.pick.total) row.appendChild(el('div', 'muted', money(rec.closest.total - rec.pick.total) + ' more than ' + rec.pick.store.name + '.'));
         const go = el('p', '');
         go.appendChild(directionsLink(rec.closest.store, 'Directions to ' + rec.closest.store.name));
         row.appendChild(go);
@@ -679,7 +719,7 @@
         note.style.gridColumn = '1 / -1';
         wrap.appendChild(note);
       }
-      const fine = el('p', 'fine', 'Distances are straight-line, not driving. If a store is more than half a mile closer than the cheapest and costs less than 10% more, we pick it as the best balance.');
+      const fine = el('p', 'fine', 'Distances are straight-line. Best balance = a store over 0.5 mi closer than the cheapest that costs less than 10% more; if none, the cheapest.');
       fine.style.gridColumn = '1 / -1';
       wrap.appendChild(fine);
       return wrap;
@@ -691,7 +731,7 @@
       d.open = open;
       const sum = document.createElement('summary');
       sum.append(el('strong', '', r.store.name), el('span', 'total', CartCompare.money(r.total)),
-        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + r.store.address + (milesTo(r.store) != null ? ' · ' + milesTo(r.store).toFixed(1) + ' mi away' : '') + (nearest && nearest.id === r.store.id ? ' · CLOSEST TO YOU' : '')));
+        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + (nearestLoc(r.store) || r.store).address + ((r.store.others || []).length ? ' (+' + r.store.others.length + ' more)' : '') + (milesTo(r.store) != null ? ' · ' + milesTo(r.store).toFixed(1) + ' mi away' : '') + (nearest && nearest.id === r.store.id ? ' · CLOSEST TO YOU' : '')));
       const ul = el('ul', 'lines');
       for (const l of r.lines) {
         const li = document.createElement('li');
@@ -744,7 +784,7 @@
       if (res.savings && res.savings.cents > 0) {
         win.appendChild(el('div', 'save', 'Save ' + CartCompare.money(res.savings.cents) + ' vs ' + res.savings.vs.name));
       }
-      box.appendChild(win);
+      if (!(userLoc && lastRec)) box.appendChild(win);   // with an address, the Cheapest column covers it
 
       const mapBox = el('div', '');
       mapBox.id = 'map';
@@ -752,7 +792,8 @@
       mapBox.setAttribute('aria-label', 'Map of stores with your list total and rank');
       box.appendChild(mapBox);
       drawMap(res);
-      box.appendChild(el('p', 'fine', 'GIANT, Walmart and Weis each have more than one store in the State College area. The map shows one location for each, so the nearest one to you may be different. We use one price per chain.'));
+      box.appendChild(legend(res));
+      box.appendChild(el('p', 'fine', 'GIANT, Weis, Walmart and ALDI have more than one store in the area, and every location gets a pin. Distances and directions use the one nearest you. We use one price per chain.'));
 
       const list = el('div', 'results-list');
       res.ranked.forEach((r, i) => list.appendChild(storeDetails(r, res.itemCount, i === 0)));
