@@ -10,10 +10,10 @@
     { "id": "wegmans-shoppers-club", "name": "Wegmans Shoppers Club", "chain": "Wegmans", "cost": "Free", "note": "Digital coupons and member prices" }
   ],
   "stores": [
-    { "id": "giant-s-atherton", "chain": "GIANT", "name": "GIANT", "address": "2121 S Atherton St", "zip": "16801", "loyalty": "giant-choice", "priceColumn": "giant" },
-    { "id": "weis-westerly", "chain": "Weis Markets", "name": "Weis Markets", "address": "560 Westerly Pkwy", "zip": "16801", "loyalty": "weis-rewards", "priceColumn": "weis" },
-    { "id": "wegmans", "chain": "Wegmans", "name": "Wegmans", "address": "345 Colonnade Blvd", "zip": "16803", "loyalty": "wegmans-shoppers-club", "priceColumn": "wegmans" },
-    { "id": "walmart", "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "walmart" },
-    { "id": "aldi", "chain": "ALDI", "name": "ALDI", "address": "1798 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "aldi" }
+    { "id": "giant-s-atherton", "lat": 40.78616, "lng": -77.83108, "chain": "GIANT", "name": "GIANT", "address": "2121 S Atherton St", "zip": "16801", "loyalty": "giant-choice", "priceColumn": "giant" },
+    { "id": "weis-westerly", "lat": 40.78153, "lng": -77.85364, "chain": "Weis Markets", "name": "Weis Markets", "address": "560 Westerly Pkwy", "zip": "16801", "loyalty": "weis-rewards", "priceColumn": "weis" },
+    { "id": "wegmans", "lat": 40.81168, "lng": -77.9082, "chain": "Wegmans", "name": "Wegmans", "address": "345 Colonnade Blvd", "zip": "16803", "loyalty": "wegmans-shoppers-club", "priceColumn": "wegmans" },
+    { "id": "walmart", "lat": 40.81001, "lng": -77.89755, "chain": "Walmart", "name": "Walmart Supercenter", "address": "1665 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "walmart" },
+    { "id": "aldi", "lat": 40.80815, "lng": -77.90161, "chain": "ALDI", "name": "ALDI", "address": "1798 N Atherton St", "zip": "16803", "loyalty": null, "priceColumn": "aldi" }
   ]
 }

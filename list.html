@@ -100,7 +100,18 @@
     .beta-note strong { display: block; margin-bottom: 2px; }
     .open-note { font-size: 0.95rem; background: var(--brand-soft); color: var(--brand-strong); border-radius: var(--radius-sm); padding: 10px 16px; margin: 0 0 24px; }
     [hidden] { display: none !important; }
+    .addr-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .addr-row input { flex: 1 1 260px; }
+    #map { height: 340px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 16px; z-index: 0; }
+    .pick { border-color: var(--brand); border-width: 2px; margin-bottom: 16px; }
+    .pick .eyebrow { font-size: 0.85rem; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 0.04em; }
+    .pick .store-name { font-size: 1.3rem; font-weight: 700; }
+    .pin { background: var(--brand); color: #fff; font: 700 12px/1.2 system-ui, sans-serif; padding: 4px 8px; border-radius: 999px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.35); transform: translate(-50%, -100%); width: max-content; }
+    .pin.first { background: #b45309; }
+    .pin.nope { background: #6b7280; }
+    .pin.you { background: #1d4ed8; }
   </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
 <body>
   <header class="site wrap narrow">
@@ -210,6 +221,17 @@
       <div class="checks" id="stores"></div>
     </section>
 
+    <!-- Step 6: Address (optional) -->
+    <section class="step card" hidden aria-labelledby="s6">
+      <h2 id="s6"><span class="num">6</span>Where are you? <span class="muted" style="font-weight:400">(optional)</span></h2>
+      <p class="muted">Add your street address to see how far each store is and get a "where to shop" pick. Your address is only used to find it on the map. We don't save it, and it's gone when you leave the page.</p>
+      <form class="addr-row" id="addr-form">
+        <input type="text" id="addr" placeholder="123 Main St, State College, PA" autocomplete="street-address" aria-label="Your street address">
+        <button class="btn secondary" type="submit" id="addr-btn">Find me</button>
+      </form>
+      <div id="addr-msg" class="msg" role="status" aria-live="polite"></div>
+    </section>
+
     <div class="done" hidden>
       <button class="btn" id="compare-btn">Compare prices</button>
       <div id="compare-msg" class="msg" role="status" aria-live="polite"></div>
@@ -222,6 +244,7 @@
     <div class="wrap">© <span id="year"></span> CartCompare · Store info for State College, PA</div>
   </footer>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="compare.js"></script>
   <script>
   (function () {
@@ -518,12 +541,71 @@
     };
     const uploadLink = () => Object.assign(document.createElement('a'), { href: '/upload.html', textContent: 'Share a receipt' });
 
+    // ---------- Location ----------
+    let userLoc = null;   // { lat, lng } for this visit only; never saved or sent to our server
+    let lastRes = null;
+    let map = null;
+    const milesTo = (store) => (userLoc && store.lat != null ? CartCompare.distanceMiles(userLoc, store) : null);
+
+    async function geocode(q) {
+      // Nominatim (OpenStreetMap), called from the shopper's browser, biased to the State College area.
+      const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us'
+        + '&viewbox=-78.1,40.95,-77.65,40.65&q=' + encodeURIComponent(q);
+      const r = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error('geocode ' + r.status);
+      const d = await r.json();
+      return d.length ? { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) } : null;
+    }
+
+    function drawMap(res) {
+      const box = $('map');
+      if (!box || typeof L === 'undefined') { if (box) box.hidden = true; return; }
+      if (map) { map.remove(); map = null; }
+      map = L.map(box, { scrollWheelZoom: false });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+      const pts = [];
+      const pin = (point, text, cls) => {
+        const e = document.createElement('div');
+        e.className = 'pin ' + cls;
+        e.textContent = text;
+        L.marker([point.lat, point.lng], { icon: L.divIcon({ html: e, className: '', iconSize: [0, 0] }), title: text }).addTo(map);
+        pts.push([point.lat, point.lng]);
+      };
+      res.ranked.forEach((r, i) => { if (r.store.lat != null) pin(r.store, '#' + (i + 1) + ' ' + r.store.name + ' ' + CartCompare.money(r.total), i === 0 ? 'first' : ''); });
+      res.noPrices.forEach((s) => { if (s.lat != null) pin(s, s.name + ' (no prices yet)', 'nope'); });
+      if (userLoc) pin(userLoc, 'You', 'you');
+      if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
+      else map.setView([40.7934, -77.86], 12);
+    }
+
+    function pickCard(res) {
+      const rec = userLoc ? CartCompare.recommend(res.ranked, Object.fromEntries(res.ranked.map((r) => [r.store.id, milesTo(r.store)]))) : null;
+      if (!rec) return null;
+      const mi = (r) => milesTo(r.store).toFixed(1) + ' mi';
+      const card = el('div', 'card pick');
+      card.appendChild(el('div', 'eyebrow', 'Where to shop'));
+      card.appendChild(el('div', 'store-name', rec.pick.store.name));
+      if (rec.kind === 'both') {
+        card.appendChild(el('p', 'muted', 'Cheapest and closest: ' + CartCompare.money(rec.pick.total) + ', ' + mi(rec.pick) + ' away.'));
+      } else if (rec.kind === 'cheapest') {
+        card.appendChild(el('p', 'muted', 'Worth the trip: ' + CartCompare.money(rec.pick.total) + ' (' + mi(rec.pick) + ' away) saves ' + CartCompare.money(rec.savingsCents)
+          + ' vs ' + rec.closest.store.name + ', your closest store (' + mi(rec.closest) + ', ' + CartCompare.money(rec.closest.total) + ').'));
+      } else {
+        card.appendChild(el('p', 'muted', 'Closest store, ' + mi(rec.pick) + ' away, at ' + CartCompare.money(rec.pick.total) + '. ' + rec.cheapest.store.name + ' is cheaper by only '
+          + CartCompare.money(rec.savingsCents) + ', which is too small to be worth the extra trip.'));
+      }
+      card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. A saving counts as worth the trip at $3 or more and 10% or more of your bill.'));
+      return card;
+    }
+
     function storeDetails(r, itemCount, open) {
       const d = document.createElement('details');
       d.open = open;
       const sum = document.createElement('summary');
       sum.append(el('strong', '', r.store.name), el('span', 'total', CartCompare.money(r.total)),
-        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + r.store.address));
+        el('small', '', r.found + ' of ' + itemCount + ' items priced · ' + r.store.address + (milesTo(r.store) != null ? ' · ' + milesTo(r.store).toFixed(1) + ' mi away' : '')));
       const ul = el('ul', 'lines');
       for (const l of r.lines) {
         const li = document.createElement('li');
@@ -545,7 +627,8 @@
       return d;
     }
 
-    function renderResults(res) {
+    function renderResults(res, keepScroll) {
+      lastRes = res;
       const box = $('results');
       box.innerHTML = '';
       box.hidden = false;
@@ -562,6 +645,8 @@
       }
 
       const best = res.ranked[0];
+      const pick = pickCard(res);
+      if (pick) box.appendChild(pick);
       const win = el('div', 'card winner');
       win.append(el('div', 'eyebrow', 'Cheapest for your list'), el('div', 'store-name', best.store.name),
         el('div', 'big-total', CartCompare.money(best.total)),
@@ -570,6 +655,13 @@
         win.appendChild(el('div', 'save', 'Save ' + CartCompare.money(res.savings.cents) + ' vs ' + res.savings.vs.name));
       }
       box.appendChild(win);
+
+      const mapBox = el('div', '');
+      mapBox.id = 'map';
+      mapBox.setAttribute('role', 'img');
+      mapBox.setAttribute('aria-label', 'Map of stores with your list total and rank');
+      box.appendChild(mapBox);
+      drawMap(res);
 
       const list = el('div', 'results-list');
       res.ranked.forEach((r, i) => list.appendChild(storeDetails(r, res.itemCount, i === 0)));
@@ -592,7 +684,7 @@
         p.append('Missing prices? ', uploadLink(), ' to fill them in for everyone.');
         box.appendChild(p);
       }
-      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!keepScroll) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     $('compare-btn').addEventListener('click', async () => {
@@ -620,6 +712,26 @@
         renderResults(res);
       } catch (err) {
         show($('compare-msg'), "We couldn't load prices right now. Please try again in a moment.", 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('addr-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const q = $('addr').value.trim();
+      if (!q) { userLoc = null; show($('addr-msg'), '', ''); if (lastRes) renderResults(lastRes, true); return; }
+      const btn = $('addr-btn');
+      btn.disabled = true;
+      show($('addr-msg'), 'Looking up your address…', '');
+      try {
+        const loc = await geocode(q);
+        if (!loc) { show($('addr-msg'), "We couldn't find that address. Try adding the city, like \"123 Main St, State College, PA\".", 'err'); return; }
+        userLoc = loc;
+        show($('addr-msg'), 'Found you. Distances are on the map and in your results.', 'ok');
+        if (lastRes) renderResults(lastRes, true);
+      } catch (err) {
+        show($('addr-msg'), "The address lookup isn't working right now. Please try again in a moment.", 'err');
       } finally {
         btn.disabled = false;
       }
