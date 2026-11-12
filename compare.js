@@ -249,10 +249,13 @@ var CartCompare = (function () {
     return 3958.8 * 2 * Math.asin(Math.sqrt(h));
   }
 
-  // A saving is worth a longer trip only if it is big enough in dollars AND as
-  // a share of the bill: at least $3 and at least 10% of the closest store's total.
-  const WORTH_IT_CENTS = 300;
-  const WORTH_IT_SHARE = 0.10;
+  // Closest vs cheapest:
+  //  - price gap under 10% of the closest store's total AND the closest store is
+  //    more than half a mile nearer: recommend the closest (the saving is small),
+  //    and still show the cheapest.
+  //  - otherwise recommend the cheapest (a 10%+ saving, or the closest is barely closer).
+  const BIG_PRICE_GAP = 0.10;
+  const FAR_MILES = 0.5;
 
   // ranked: compare() result; miles: { storeId: miles } from the shopper's address.
   // Only stores that price as much of the list as the best one are compared,
@@ -263,10 +266,12 @@ var CartCompare = (function () {
     if (!tier.length) return null;
     const cheapest = tier.reduce((a, b) => (b.total < a.total ? b : a));
     const closest = tier.reduce((a, b) => (miles[b.store.id] < miles[a.store.id] ? b : a));
-    if (cheapest === closest) return { kind: 'both', pick: cheapest, cheapest, closest, savingsCents: 0 };
+    if (cheapest === closest) return { kind: 'both', pick: cheapest, cheapest, closest, savingsCents: 0, extraMiles: 0 };
     const savingsCents = closest.total - cheapest.total;
-    const worth = savingsCents >= WORTH_IT_CENTS && savingsCents >= closest.total * WORTH_IT_SHARE;
-    return { kind: worth ? 'cheapest' : 'closest', pick: worth ? cheapest : closest, cheapest, closest, savingsCents };
+    const extraMiles = miles[cheapest.store.id] - miles[closest.store.id];
+    const smallSaving = savingsCents < closest.total * BIG_PRICE_GAP;
+    const kind = smallSaving && extraMiles > FAR_MILES ? 'closest' : 'cheapest';
+    return { kind, pick: kind === 'closest' ? closest : cheapest, cheapest, closest, savingsCents, extraMiles };
   }
 
   const money = (cents) => '$' + (cents / 100).toFixed(2);

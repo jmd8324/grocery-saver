@@ -603,21 +603,32 @@
       if (!rec) return null;
       const mi = (r) => milesTo(r.store).toFixed(1) + ' mi';
       const card = el('div', 'card pick');
-      card.appendChild(el('div', 'eyebrow', 'Where to shop'));
-      card.appendChild(el('div', 'store-name', rec.pick.store.name));
+      const total = (r) => CartCompare.money(r.total);
       if (rec.kind === 'both') {
-        card.appendChild(el('p', 'muted', 'Cheapest and closest: ' + CartCompare.money(rec.pick.total) + ', ' + mi(rec.pick) + ' away.'));
+        card.append(el('div', 'eyebrow', 'Closest and cheapest'), el('div', 'store-name', rec.pick.store.name),
+          el('p', 'muted', total(rec.pick) + ', ' + mi(rec.pick) + ' away. It wins on both.'));
       } else if (rec.kind === 'cheapest') {
-        card.appendChild(el('p', 'muted', 'Worth the trip: ' + CartCompare.money(rec.pick.total) + ' (' + mi(rec.pick) + ' away) saves ' + CartCompare.money(rec.savingsCents)
-          + ' vs ' + rec.closest.store.name + ', your closest store (' + mi(rec.closest) + ', ' + CartCompare.money(rec.closest.total) + ').'));
+        card.append(el('div', 'eyebrow', 'Cheapest, and worth the trip'), el('div', 'store-name', rec.cheapest.store.name),
+          el('p', 'muted', total(rec.cheapest) + ', ' + mi(rec.cheapest) + ' away. '
+            + (rec.savingsCents >= rec.closest.total * 0.10
+              ? 'It saves ' + CartCompare.money(rec.savingsCents) + ' (10% or more) vs ' + rec.closest.store.name + ', your closest store (' + mi(rec.closest) + ', ' + total(rec.closest) + ').'
+              : 'It is only ' + rec.extraMiles.toFixed(1) + ' mi farther than ' + rec.closest.store.name + ', your closest store, so it is worth the small detour.')));
       } else {
-        card.appendChild(el('p', 'muted', 'Closest store, ' + mi(rec.pick) + ' away, at ' + CartCompare.money(rec.pick.total) + '. ' + rec.cheapest.store.name + ' is cheaper by only '
-          + CartCompare.money(rec.savingsCents) + ', which is too small to be worth the extra trip.'));
+        card.append(el('div', 'eyebrow', 'Closest (recommended)'), el('div', 'store-name', rec.closest.store.name),
+          el('p', 'muted', total(rec.closest) + ', ' + mi(rec.closest) + ' away. Why: ' + rec.cheapest.store.name + ' is cheaper by only ' + CartCompare.money(rec.savingsCents)
+            + ' (under 10%) but is ' + rec.extraMiles.toFixed(1) + ' mi farther, so the closer store is the better trip.'));
+        const cheap = el('div', '');
+        cheap.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid var(--border)';
+        cheap.append(el('div', 'eyebrow', 'Cheapest'), el('div', 'store-name', rec.cheapest.store.name),
+          el('p', 'muted', total(rec.cheapest) + ', ' + mi(rec.cheapest) + ' away.'));
+        cheap.appendChild(directionsLink(rec.cheapest.store, 'Directions to ' + rec.cheapest.store.name));
+        card.appendChild(cheap);
       }
       const go = el('p', '');
       go.appendChild(directionsLink(rec.pick.store, 'Directions to ' + rec.pick.store.name));
+      if (rec.kind === 'closest') go.style.marginTop = '12px';
       card.appendChild(go);
-      card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. A saving counts as worth the trip at $3 or more and 10% or more of your bill.'));
+      card.appendChild(el('p', 'fine', 'Distances are straight-line, not driving. We recommend the closest store when the cheapest saves under 10% and is more than half a mile farther.'));
       return card;
     }
 
