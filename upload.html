@@ -197,7 +197,7 @@
       }
       // Comparing your cart is a Pro feature; sharing is free for everyone.
       const a = data.access;
-      const pro = Boolean(a && a.open);
+      const pro = Boolean(a && a.plan === 'pro');
       if (data.count && data.counted === false) box.appendChild(el('p', 'This photo was already shared. Thanks!', 'muted'));
       const note = el('div', null, 'progress');
       note.append(el('div', pro

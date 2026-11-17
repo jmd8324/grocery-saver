@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     const status = await unlock(who);
     if (!status.open) {
-      return res.status(403).json({ error: 'Comparing your cart is a CartCompare Pro feature.', status });
+      return res.status(403).json({ error: 'Please log in or create a free account to compare your cart.', status });
     }
     return res.status(200).json({ csv: readSheet(), status });
   } catch (err) {
