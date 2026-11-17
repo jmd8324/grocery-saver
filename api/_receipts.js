@@ -40,9 +40,15 @@ export async function recordReceipt(who, imageData) {
 
 // Where this shopper stands. Comparing your cart is a Pro feature
 // (paid subscribers and the demo account). Anyone can still share receipts.
+//
+// TESTING MODE: while we're testing, comparing needs a free account but not
+// Pro. Set COMPARE_REQUIRES_PRO=1 in Vercel (and redeploy) to bring the Pro
+// gate back; nothing else needs to change.
+const COMPARE_REQUIRES_PRO = process.env.COMPARE_REQUIRES_PRO === '1';
+
 export async function accessStatus(who) {
   const pro = isPro(who);
-  return { plan: pro ? 'pro' : 'free', signedIn: Boolean(who && who.email), open: pro };
+  return { plan: pro ? 'pro' : 'free', signedIn: Boolean(who && who.email), open: COMPARE_REQUIRES_PRO ? pro : Boolean(who && who.email) };
 }
 
 // Kept so callers don't change: opening the builder needs Pro, nothing else.

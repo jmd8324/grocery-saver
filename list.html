@@ -146,8 +146,8 @@
     <!-- Shown unless this shopper has Pro (see api/_receipts.js) -->
     <section class="card gate" id="gate" hidden aria-labelledby="gate-title">
       <div class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-      <h2 id="gate-title">Comparing your cart is part of Pro</h2>
-      <p class="muted" id="gate-why">Price your whole list at every store in town for $14 a month. Cancel anytime.</p>
+      <h2 id="gate-title">Create a free account to compare</h2>
+      <p class="muted" id="gate-why">Price your whole list at every store in town. It's free: just an email and a password.</p>
       <div class="actions" id="gate-actions">
         <a class="btn" href="/pro.html#signup" id="gate-main">Create an account</a>
         <a class="btn secondary" href="/pro.html" id="gate-second">Log in</a>
@@ -896,7 +896,9 @@
       $('results').hidden = true;
       $('open-note').hidden = true;
       $('gate').hidden = false;
-      if (status && status.signedIn) {
+      if (status && status.signedIn) { // only when the Pro gate is switched back on
+        $('gate-title').textContent = 'Comparing your cart is part of Pro';
+        $('gate-why').textContent = 'Price your whole list at every store in town for $14 a month. Cancel anytime.';
         $('gate-main').textContent = 'Upgrade to Pro';
         $('gate-main').href = '/pro.html';
         $('gate-second').hidden = true;

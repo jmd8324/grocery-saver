@@ -103,7 +103,7 @@ export default async function handler(req, res) {
   // The list builder is for Pro members (see api/_receipts.js).
   const status = await accessStatus(await whoIs(req)).catch(() => null);
   if (!status || !status.open) {
-    return res.status(403).json({ error: 'Comparing your cart is a CartCompare Pro feature.', status });
+    return res.status(403).json({ error: 'Please log in or create a free account to compare your cart.', status });
   }
 
   if (await overLimit(req, 'parse-list', 30, 60 * 60)) {
